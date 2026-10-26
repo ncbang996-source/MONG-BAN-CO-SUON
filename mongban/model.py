@@ -35,7 +35,6 @@ CELLS_REBAR = [
 ]
 CELLS_COVER = {"COVER_B": "K34", "COVER": "K35"}   # mm trong Excel -> m
 CELL_RLAYERS = "F51"                               # "02 lớp"
-CELL_TH_GIA = ("TH", "F9")                         # đường kính thép giá dầm (sheet TH, nếu có)
 
 HT_NAMES = ["ĐỠ", "NÉO GÓC", "NÉO DỪNG"]
 SCALES = [50, 75, 100, 125, 150, 200, 250]
@@ -60,7 +59,6 @@ def default_params() -> dict:
         "RC_D": 25.0, "RC_N": 12.0, "RT_D": 8.0, "RT_S": 200.0, "RP_D": 8.0, "RP_S": 400.0,
         "RL_D": 8.0, "RL_S": 100.0, "RL_N": 2.0,
         "RD_D": 25.0, "RD_N": 8.0, "RDT_D": 8.0, "RDT_S": 200.0, "RDP_D": 8.0, "RDP_S": 400.0,
-        "RG_D": 14.0,                                     # thép giá dầm (tạm thời)
         "TL_D": 25.0, "TL_S": 300.0,
         "COVER": 0.075, "COVER_B": 0.075,
         # khung tên
@@ -138,11 +136,6 @@ def read_excel(path: str, sheet: str = "TONG HOP", p: dict | None = None) -> tup
                 p["RL_N"] = float(n)
         except ValueError:
             pass
-    sh, a = CELL_TH_GIA
-    if sh in wb.sheetnames:
-        v = wb[sh][a].value
-        if _num(v) and v > 0:
-            p["RG_D"] = float(v)
     wb.close()
     if nread == 0:
         raise ValueError("Không đọc được số liệu nào từ sheet. Kiểm tra lại địa chỉ ô.")
@@ -269,7 +262,7 @@ def validate(p) -> str | None:
         if l1 - p["A"] - 2 * p["E"] < p["C"] + 0.2:
             return "Lỗ mở c không lọt giữa 2 dầm (trừ vát nách)."
     keys = ("RS_D", "RS_S1", "RS_S2", "RCH_D", "RCH_S1", "RCH_S2", "RC_D", "RT_D", "RT_S", "RP_D", "RP_S",
-            "RL_D", "RL_S", "RD_D", "RD_N", "RDT_D", "RDT_S", "RDP_D", "RDP_S", "RG_D", "TL_D", "TL_S")
+            "RL_D", "RL_S", "RD_D", "RD_N", "RDT_D", "RDT_S", "RDP_D", "RDP_S", "TL_D", "TL_S")
     if min(p[k] for k in keys) < 1e-6:
         return "Đường kính / khoảng cách / số thanh thép phải > 0."
     n = int(round(p["RC_N"]))

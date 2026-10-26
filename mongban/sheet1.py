@@ -49,7 +49,7 @@ def layout(g: Geo):
 def outline_aa(v: V, g: Geo, u0=None):
     """Đường bao bê tông mặt cắt A-A (cắt tại y = 0, nhìn theo +Y). u0 = 0: chỉ vẽ nửa phải."""
     L, hs, hd, a, e, b, c = g.Lh, g.hs, g.hd, g.a, g.e, g.bb, g.c
-    lo = -L if u0 is None else u0
+    lo = -1e9 if u0 is None else u0
 
     def h(lay, z, x1, x2):
         x1, x2 = max(x1, lo), max(x2, lo)
@@ -190,16 +190,14 @@ def draw_section(c: Ctx, g: Geo):
         c.ln("HINH THUC", 2 * cx - xa, pa, 2 * cx - xi, pa)
         xl = xi - 2.8
         with c.item("soil", "Ghi chú đất đắp"):
-            c.pl("CHU", False, [(xl, ygl + 1.4), (xl - 5.6, ygl + 5.6), (xl - 32.1, ygl + 5.6)], fixed=(0,))
-            di = c.item_off()
-            c.arrow("CHU", xl - 5.6 + di[0], ygl + 5.6 + di[1], xl, ygl + 1.4, 1.6, 0.4, fixed=True)
-            c.tx("CHU", xl - 32.2, ygl + 6.4, 2.0, T_SOIL)
+            w = txtw(T_SOIL, 2.0)
+            c.pl("CHU", False, [(xl, ygl + 1.4), (xl - 4.2, ygl + 5.6), (xl - 4.7 - w, ygl + 5.6)], fixed=(0,))
+            c.tx("CHU", xl - 4.6 - w, ygl + 6.4, 2.0, T_SOIL)
     xf = cx + k * (g.Lh + 0.6 * (g.pitT - g.Lh))
-    yf = g.ybase + 0.55 * (ygl - g.ybase)
     with c.item("fill", "Ghi chú đất đắp đầm chặt"):
-        c.pl("CHU", False, [(xf, yf), (xf + 4.0, ygl + 4.5), (xf + 4.0 + txtw(T_FILL, 2.0) + 1.0, ygl + 4.5)],
+        c.pl("CHU", False, [(xf, ygl - 2.0), (xf + 4.0, ygl + 4.5), (xf + 4.4 + txtw(T_FILL, 2.0), ygl + 4.5)],
              fixed=(0,))
-        c.tx("CHU", xf + 4.5, ygl + 5.3, 2.0, T_FILL)
+        c.tx("CHU", xf + 4.2, ygl + 5.3, 2.0, T_FILL)
     title(c, cx, g.yd - 7.5, "MẶT CẮT A-A", f"TL:1/{g.den}")
 
 
@@ -262,8 +260,13 @@ def dim_section(c: Ctx, g: Geo):
     c.dimH("DIM", (cx - hl, g.ybase), (cx - k * g.pitB, g.ylb), g.yd, (cx - k * g.pitB - 3.2, g.yd + 1.7))
     c.dimH("DIM", (cx + hl, g.ybase), (cx + k * g.pitB, g.ylb), g.yd, (cx + k * g.pitB + 3.2, g.yd + 1.7))
     if g.hasCushion:
-        c.dimH("DIM", (cx - k * L, g.ylt), (cx - k * L + 0.5 * k, g.ylt), g.ylb - 5.0)
-        c.dimH("DIM", (cx + k * L - 0.5 * k, g.ylt), (cx + k * L, g.ylt), g.ylb - 5.0)
+        # đoạn vải địa gấp vào dưới móng 500: điểm đo trên lớp vải địa, đường gióng ngắt qua lớp đệm cát
+        yd5 = g.ylb - 5.0
+        noext = {"dimse1": 1, "dimse2": 1}
+        for x1, x2 in ((cx - k * L, cx - k * L + 0.5 * k), (cx + k * L - 0.5 * k, cx + k * L)):
+            c.dim("DIM", 0.0, (x1, g.ylt), (x2, g.ylt), (x1, yd5), override=noext)
+            for x in (x1, x2):
+                c.ln("DIM", x, g.ylb - 1.0, x, yd5 - 1.0)
     # trên: tim cổ móng, bề rộng cổ móng
     y1, y2 = g.ytop + 6.0, g.ytop + 12.9
     for s_ in (-1, 1):
@@ -392,8 +395,20 @@ def dim_plan(c: Ctx, g: Geo, v: V):
         v.dimH((xa, qy + a / 2), (xa + g.e, qy + a / 2), v.y(qy + a / 2 + g.e) + 2.5)
     if g.hasHole:
         h = g.c / 2
-        v.dimH((-h, -h), (h, -h), v.y(-h) - 3.0)
-        v.dimV((-h, -h), (-h, h), v.x(-h) - 3.0)
+        ml_ = model.ML if h > model.ML else 0.0
+        xs = [-h, -h + ml_, h - ml_, h] if ml_ else [-h, h]
+        for i in range(len(xs) - 1):          # lỗ mở + lót tràn vào lỗ 100 mỗi bên
+            v.dimH((xs[i], -h), (xs[i + 1], -h), v.y(-h) - 3.0)
+            v.dimV((-h, xs[i]), (-h, xs[i + 1]), v.x(-h) - 3.0)
+
+
+def tim_mong(c: Ctx, cx, cy, r):
+    """Ký hiệu tim móng: vòng tròn, tô đen 2 góc phần tư đối đỉnh."""
+    c.ci("CHU", cx, cy, r)
+    for a0 in (0.0, 180.0):
+        pts = [(cx, cy)] + [(cx + r * math.cos(math.radians(a0 + t)), cy + r * math.sin(math.radians(a0 + t)))
+                            for t in range(0, 91, 10)]
+        c.solid("CHU", pts)
 
 
 def draw_plan(c: Ctx, g: Geo, detail: bool):
@@ -401,7 +416,7 @@ def draw_plan(c: Ctx, g: Geo, detail: bool):
     k = g.k
     plan_outline(c, g, v)
     cx, cy = g.cx, g.cy
-    c.ci("CHU", cx, cy, 1.2)
+    tim_mong(c, cx, cy, 1.2)
     with c.item("axis", "Ghi chú tim móng"):
         xh = cx - k * g.c / 2 - 2.0 if g.hasHole else cx
         sg = -1.0 if int(g.p["HT"]) == 1 else 1.0         # néo góc: chữ phân giác ở trên trục -> ghi tim móng ở dưới
@@ -413,7 +428,7 @@ def draw_plan(c: Ctx, g: Geo, detail: bool):
     # ký hiệu mặt cắt A-A
     xl, xr = v.x(-g.Lh - model.ML) - 36.0, v.x(g.Lh + model.ML) + 22.0
     if detail:
-        xr = v.x(g.Lh + model.ML) + 4.0
+        xr = v.x(g.Lh + model.ML) + 2.0 + 7.76
     marker(c, xl, cy, 1.0, "A")
     marker(c, xr, cy, -1.0, "A")
     if detail:
@@ -425,11 +440,11 @@ def draw_plan(c: Ctx, g: Geo, detail: bool):
 
 def plan_marks(c: Ctx, g: Geo, v: V):
     """Vết cắt 1-1 (ngang qua dầm theo Y), 2-2 (ngang qua dầm theo X), 3-3 (song song mặt vát nách)."""
-    a, W = g.a, 0.8
+    a, W = g.a, 0.3
     y1 = -(g.dy + a / 2 + g.e + g.D2 / 2)
-    cut_line(c, v.P(-g.dx - a / 2 - W, y1), v.P(-g.dx + a / 2 + W, y1), "1")
+    cut_line(c, v.P(-g.dx - a / 2 - W, y1), v.P(-g.dx + a / 2 + W, y1), "1", ext=0.5)
     x2 = -(g.dx + a / 2 + g.e + g.D1 / 2)
-    cut_line(c, v.P(x2, -g.dy + a / 2 + W), v.P(x2, -g.dy - a / 2 - W), "2")
+    cut_line(c, v.P(x2, -g.dy + a / 2 + W), v.P(x2, -g.dy - a / 2 - W), "2", ext=0.5)
     if g.hasHaunch:
         qx, qy = -g.dx, -g.dy
         ext = 0.25
@@ -446,20 +461,11 @@ def plan_bars(c: Ctx, g: Geo, v: V):
     L, B, a, cov = g.Lh, g.Bh, g.a, g.cov
     d = p["RS_D"]
     xr = v.x(L + model.ML) + 3.0
-    used = [v.y(0.0), v.y(g.dy) + 4.5, v.y(g.dy) - 4.5]
 
     def mid(lst):
         return lst[len(lst) // 2] if lst else None
 
-    def tag_y(y0):
-        y = y0
-        for u in sorted(used):
-            if abs(u - y) < 8.0:
-                y = u + 8.0
-        used.append(y)
-        return y
-
-    # --- thanh theo X (thép 3, 4) ở nửa trên: đường rải đứng gần mép phải
+    # --- thanh theo X (thép 3, 4) ở nửa trên: đường rải đứng gần mép phải; leader chạm đường rải
     zones = []
     for z0, z1, kd in g.zones(B, g.dy):
         if z0 >= -1e-9:
@@ -467,20 +473,28 @@ def plan_bars(c: Ctx, g: Geo, v: V):
     if g.hasHole:
         zones.append((4, [y for y in g.ys4 if y >= -1e-9] or g.ys4, "in"))
     xm = L - 0.12 * (L - g.dx - a / 2)
+    used = [v.y(g.dy + a / 2) + 7.0]
     for pos, ys, kd in sorted(zones, key=lambda z: -max(z[1]) if z[1] else 0):
         if not ys:
             continue
-        y = mid(ys)
+        y = ys[len(ys) // 3] if kd == "in" and pos == 3 else mid(ys)
         x0 = 0.0 if pos == 3 else g.c / 2 + cov
         v.ln("COTTHEP", x0, y, L - cov, y)
         yy = ys if pos == 3 else g.ys4
         arrow2(c, v.x(xm), v.y(min(yy)), v.x(xm), v.y(max(yy)))
         c.ci("CHU", v.x(xm), v.y(y), 0.5)
         s = p["RS_S2"] if kd == "out" else p["RS_S1"]
-        n = 2 * len(yy)
-        co([v.P(xm, y)], xr, tag_y(v.y(y)), 1, pos, phi(d, s), f"SL:{n}%%C{int(d)} - 2 LỚP", tick=False,
+        lo_, hi_ = v.y(min(yy)), v.y(max(yy))
+        by = 0.5 * (lo_ + hi_) if pos == 4 else 0.5 * (lo_ + hi_) + (0.2 * (hi_ - lo_) if kd == "in" else 0.0)
+        for u in used:
+            if abs(by - u) < 8.0:
+                by = max(lo_ + 0.5, min(hi_ - 0.5, u - 8.0 if by < u else u + 8.0))
+        used.append(by)
+        if abs(by - v.y(y)) < 1.0:           # không trùng điểm thanh đại diện
+            by = min(hi_ - 0.3, by + 1.5)
+        co([(v.x(xm), by)], xr, by, 1, pos, phi(d, s), f"SL:{2 * len(yy)}%%C{int(d)} - 2 LỚP", tick=False,
            mode=True)
-    # --- thanh theo Y (thép 1, 2) ở nửa dưới: đường rải ngang gần mép dưới, leader ngang chạm thanh
+    # --- thanh theo Y (thép 1, 2) ở nửa dưới: đường rải ngang gần mép dưới; leader chạm đường rải
     zones = []
     for z0, z1, kd in g.zones(L, g.dx):
         if z0 >= -1e-9:
@@ -489,7 +503,7 @@ def plan_bars(c: Ctx, g: Geo, v: V):
         zones.append((2, [x for x in g.xs2 if x >= -1e-9] or g.xs2, "in"))
     ybar = -B + 0.12 * g.D2
     yq = v.y(-g.dy) + 4.0
-    ylo = v.y(-B + cov) + 1.5
+    ylo = v.y(ybar) + 3.0
     for pos, xs, kd in sorted(zones, key=lambda z: min(z[1]) if z[1] else 0):
         if not xs:
             continue
@@ -500,10 +514,13 @@ def plan_bars(c: Ctx, g: Geo, v: V):
         arrow2(c, v.x(min(xx)), v.y(ybar), v.x(max(xx)), v.y(ybar))
         c.ci("CHU", v.x(x), v.y(ybar), 0.5)
         s = p["RS_S2"] if kd == "out" else p["RS_S1"]
+        nx_ = [q for q in xx if q > x + 1e-6]
+        xt = 0.5 * (x + nx_[0]) if nx_ else 0.5 * (x + max(xx)) if max(xx) > x else x - 0.05
         yq -= 9.0
         by = max(ylo, yq)
-        co([(v.x(x), by)], xr, by, 1, pos, phi(d, s), f"SL:{2 * len(xx)}%%C{int(d)} - 2 LỚP", mode=True)
-    # --- thép xiên góc lỗ (5) ở góc trên phải của lỗ
+        co([v.P(xt, ybar)], xr, by, 1, pos, phi(d, s), f"SL:{2 * len(xx)}%%C{int(d)} - 2 LỚP", tick=False,
+           mode=True)
+    # --- thép xiên góc lỗ (5) ở góc trên phải của lỗ: 1 đoạn ngang + 1 đoạn xiên
     if g.hasHole and g.n5:
         m = max(1, g.n5 // 8)
         cc = g.c / 2
@@ -516,34 +533,32 @@ def plan_bars(c: Ctx, g: Geo, v: V):
             ox, oy = cc + t * r2, cc + t * r2
             v.ln("COTTHEP", ox + r2 * hl, oy - r2 * hl, ox - r2 * hl, oy + r2 * hl)
             pts.append(v.P(ox + r2 * 0.6 * hl, oy - r2 * 0.6 * hl))
-        co([pts[-1]], v.x(cc + hl + 0.2), pts[-1][1] - 3.0, 1, 5, f"{g.n5 // 4}%%C{int(d)}", mode=True)
-    # --- thép chủ dầm: vẽ từ trục đối xứng tới đầu dầm
-    ws = a - 2 * cov - 2 * g.dt
+        co([pts[-1]], pts[-1][0] + 3.0, pts[-1][1] - 3.5, 1, 5, f"{g.n5 // 4}%%C{int(d)}")
+    # --- thép chủ dầm: trên mặt bằng chỉ thấy các thanh lớp ngoài cùng, vẽ từ trục đối xứng tới đầu dầm
     full_y, cut_y = g.rib_len(True)
     full_x, cut_x = g.rib_len(False)
-    nf, nc = g.n_full, g.n_cut
-    us_f = [(-ws / 2 + (i + 0.5) * ws / nf) for i in range(nf)]
-    us_c = [(-ws / 2 + (i + 0.5) * ws / max(1, nc)) * 0.7 for i in range(nc)]
+    row = g.rows_t[0][1]
     dm = int(p["RD_D"])
-    for u in us_f:
-        v.ln("COTTHEP", g.dx + u, 0.0, g.dx + u, full_y / 2)
-    for u in us_c:
-        v.ln("COTTHEP", g.dx + u, 0.0, g.dx + u, cut_y / 2)
+    for u, f in row:
+        v.ln("COTTHEP", g.dx + u, 0.0, g.dx + u, (full_y if f else cut_y) / 2)
+        v.ln("COTTHEP", 0.0, g.dy + u, (full_x if f else cut_x) / 2, g.dy + u)
+    uf = [u for u, f in row if f]
     ex = v.x(g.dx + a / 2) + 0.8
     yt = 0.5 * (cut_y / 2 + full_y / 2)
-    co([v.P(g.dx + u, yt) for u in us_f], ex, v.y(yt), 1, 10, f"{nf}%%C{dm}", mode=True)
-    if nc:
-        yc = 0.5 * (g.dy + g.a / 2 + g.e + cut_y / 2)
-        co([v.P(g.dx + u, yc) for u in us_c], ex, v.y(yc), 1, 11, f"{nc}%%C{dm}", mode=True)
-    for u in us_f:
-        v.ln("COTTHEP", 0.0, g.dy + u, full_x / 2, g.dy + u)
-    for u in us_c:
-        v.ln("COTTHEP", 0.0, g.dy + u, cut_x / 2, g.dy + u)
+    co([v.P(g.dx + u, yt) for u in uf], ex, v.y(yt), 1, 10, f"{g.n_full}%%C{dm}", tick=False, mode=True)
+    yc = 0.5 * (g.dy + a / 2 + g.e + cut_y / 2)
+    if g.n_cut:
+        co([v.P(g.dx + u, yc) for u, _ in row], ex, v.y(yc), 1, 11, f"{g.n_cut}%%C{dm}", tick=False, mode=True)
+    # kích thước đoạn cắt thép dầm
+    v.dimV((g.dx - a / 2, cut_y / 2), (g.dx - a / 2, full_y / 2), v.x(g.dx - a / 2) - 3.0)
+    v.dimH((cut_x / 2, g.dy + a / 2), (full_x / 2, g.dy + a / 2), v.y(g.dy + a / 2) + 2.5)
     xt = 0.5 * (cut_x / 2 + full_x / 2)
-    co([v.P(xt, g.dy + u) for u in us_f], xr, v.y(g.dy) + 4.5, 1, 13, f"{nf}%%C{dm}", mode=True)
-    if nc:
+    co([v.P(xt, g.dy + u) for u in uf], xr, v.y(g.dy + a / 2) + 7.0, 1, 13, f"{g.n_full}%%C{dm}", tick=False,
+       mode=True)
+    if g.n_cut:
         xc = 0.5 * (g.dx + a / 2 + g.e + cut_x / 2)
-        co([v.P(xc, g.dy + u) for u in us_c], xr, v.y(g.dy) - 4.5, 1, 14, f"{nc}%%C{dm}", mode=True)
+        co([v.P(xc, g.dy + u) for u, _ in row], v.x(xc) - 1.0, v.y(g.dy - a / 2) - 4.0, 1, 14, f"{g.n_cut}%%C{dm}",
+           tick=False, mode=True)
 
 
 # ---------------------------------------------------------------------------

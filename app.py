@@ -369,7 +369,6 @@ class App(tk.Tk):
             ttk.Entry(body, textvariable=vd, width=5).grid(row=r, column=1, sticky="w")
             ttk.Entry(body, textvariable=self._var(ks), width=6).grid(row=r, column=2, sticky="w")
             r += 1
-        row("Ø thép giá dầm (tạm thời)", "RG_D", 5)
         ttk.Label(body, text="Thép chủ cổ móng: số thanh / Ø").grid(row=r, column=0, sticky="w", padx=(10, 4), pady=1)
         ttk.Entry(body, textvariable=self._var("RC_N"), width=5).grid(row=r, column=1, sticky="w")
         ttk.Entry(body, textvariable=self._var("RC_D"), width=6).grid(row=r, column=2, sticky="w")

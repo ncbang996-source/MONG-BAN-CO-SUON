@@ -28,7 +28,7 @@ App Windows chạy offline, vẽ nhanh bản vẽ **móng bản có dầm (móng
 | C44 / D44, D45 | Thép bản: Ø / bước (cm) ở ô 2 cạnh và ô 4 cạnh ngàm | I44 / J44, J45 | Thép chống: Ø / bước (cm) |
 | C48 / D48 | Thép chủ cổ móng: Ø / số thanh | C49..D51, F51 | Đai cổ, đai phụ cổ, lưới đầu trụ, số lớp |
 | I48 / J48 | Thép chủ dầm: Ø / số thanh 1 mặt | I49..J51 | Đai dầm, đai phụ dầm, thang leo |
-| TH!F9 | Ø thép giá dầm (nếu có sheet TH; tạm thời) | | |
+| | Thép giá dầm: Ø = thép bản; số thanh theo TCVN 5574:2018 mục 10.3.3.3 (h > 700) | | |
 
 ## Quy tắc tính
 - **Khối lượng bê tông, lót, đào, đắp, đệm cát, ván khuôn, vải địa:** theo công thức sheet `KL be tong` của Excel mẫu. Vải địa trải phẳng thành 1 tấm chữ nhật. Mái hố đào vẽ 1:0.5.

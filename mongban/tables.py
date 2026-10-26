@@ -70,7 +70,7 @@ def shape(c: Ctx, r, x, y, w, h):
         lbl(c, xm, y0 + hh + 0.9, ni(d[1]))
         lbl(c, x0 - 1.5, yc, ni(d[2]), 90.0)
         lbl(c, x0 + ww + 3.5, y0 + 0.8, ni(d[0]))
-    elif pos in (17, 18, 21, 26):
+    elif pos in (17, 18, 21):
         x0, x1 = x + 0.15 * w + 3.0, x + w - 0.15 * w - 3.0
         tie(c, lay, x0, yc - 1.5, 1.0, 0.0, x1 - x0, 0.7, 2.0)
         lbl(c, xm, yc + 0.2, ni(d[1]))

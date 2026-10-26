@@ -313,6 +313,13 @@ class Ctx:
             h.paths.add_polyline_path([self.wp(*p) for p in hp], is_closed=True, flags=16)
         return h
 
+    def solid(self, lay, pts):
+        """Vùng tô đặc (hatch SOLID)."""
+        h = self.msp.add_hatch(color=7, dxfattribs={"layer": lay})
+        h.set_solid_fill(color=7)
+        h.paths.add_polyline_path([self.wp(*p) for p in pts], is_closed=True)
+        return h
+
     # --- chữ --------------------------------------------------------------
     def _text(self, lay, x, y, h, s, align, rot=0.0, bold=False, underline=False):
         top = self._stack[-1] if self._stack else "none"
@@ -365,7 +372,7 @@ class Ctx:
         return self._text(lay, x, y, h, s, a, **kw)
 
     # --- kích thước -------------------------------------------------------
-    def dim(self, lay, rot, p1, p2, pd, tp=None, dimname=None):
+    def dim(self, lay, rot, p1, p2, pd, tp=None, dimname=None, override=None):
         """Dim: điểm đo p1, p2 cố định theo hình; đường dim và chữ dịch theo item."""
         with self.item("dim", "Kích thước"):
             dxi, dyi = self.off(True)
@@ -393,7 +400,8 @@ class Ctx:
                 self.wp(pd[0] - 1, p1[1])
                 self.wp(pd[0] + 1, p2[1])
             d = self.msp.add_linear_dim(base=base, p1=a, p2=b, angle=rot, location=loc,
-                                        dimstyle=dimname or self.dimname, dxfattribs={"layer": lay})
+                                        dimstyle=dimname or self.dimname, override=override,
+                                        dxfattribs={"layer": lay})
             d.render()
         lw = LAYERS.get(lay, (0, 0, 18))[2]
         blk = self.doc.blocks.get(d.dimension.dxf.geometry)

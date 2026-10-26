@@ -89,7 +89,7 @@ class Geo:
         self.ds = p["RS_D"] / 1000.0
         self.dm = p["RD_D"] / 1000.0
         self.dt = p["RDT_D"] / 1000.0
-        self.dg = p["RG_D"] / 1000.0
+        self.dg = p["RS_D"] / 1000.0          # thép giá dầm lấy bằng đường kính thép bản móng
         # bề rộng ô bản ngoài (từ mặt dầm tới mép móng)
         self.D1 = self.Lh - self.dx - self.a / 2
         self.D2 = self.Bh - self.dy - self.a / 2
@@ -189,10 +189,10 @@ class Geo:
             rows_b.append((zb, list(zip(us, fl))))
             rows_t.append((zt, list(zip(us, fl))))
         self.rows_b, self.rows_t = rows_b, rows_t
-        hh = self.hd - cov - self.covb
-        self.n_gia = 1 if hh <= 1.0 + 1e-6 else 2 if hh <= 1.6 + 1e-6 else 3
-        z0 = rows_b[-1][0] + d / 2
-        z1 = rows_t[-1][0] - d / 2
+        # thép giá (TCVN 5574:2018 mục 10.3.3.3): h > 700 -> khoảng cách các thanh dọc theo chiều cao <= 400
+        z0 = rows_b[-1][0]
+        z1 = rows_t[-1][0]
+        self.n_gia = max(0, ceil_((z1 - z0) / 0.4 - 1e-6) - 1) if self.hd > 0.7 + 1e-6 else 0
         self.z_gia = [z0 + (i + 1) * (z1 - z0) / (self.n_gia + 1) for i in range(self.n_gia)]
         self.u_gia = w_in / 2 - self.dg / 2
         # đoạn cắt bớt mỗi đầu thanh ngắt = 1/2 khoảng từ mép dầm ngang tới mép móng (theo dầm đang cắt), làm tròn lên 100
@@ -206,6 +206,12 @@ class Geo:
     def has_tie2(self):
         """Thép chủ dầm 2 lớp -> thêm đai phụ ngang giữ lớp thứ 2 (mặt trên và mặt dưới)."""
         return len(self.rows_b) > 1
+
+    def z_tie2(self):
+        """Cao độ đai phụ giữ lớp 2: nằm trong khe giữa lớp 1 và lớp 2 (đỡ lớp 2)."""
+        if not self.has_tie2():
+            return []
+        return [0.5 * (self.rows_b[0][0] + self.rows_b[1][0]), 0.5 * (self.rows_t[0][0] + self.rows_t[1][0])]
 
     def rib_segments(self, along_y):
         """Đoạn dầm rải đai (bỏ vùng giao dầm + vát nách), toạ độ dọc dầm."""
@@ -376,15 +382,15 @@ class Geo:
             nm = "theo Y" if along_y else "theo X"
             R(p0, dm, full, self.n_full * 2 * 2, [1000 * full], f"Thép chủ dầm {nm} (dài suốt)")
             R(p0 + 1, dm, cut, self.n_cut * 2 * 2, [1000 * cut], f"Thép chủ dầm {nm} (ngắt)")
-            R(p0 + 2, g("RG_D"), full, self.n_gia * 2 * 2, [1000 * full], f"Thép giá dầm {nm}")
+            R(p0 + 2, g("RS_D"), full, self.n_gia * 2 * 2, [1000 * full], f"Thép giá dầm {nm}")
         # 16-18: đai dầm, đai phụ
         w, hh = self.a - 2 * cov, self.hd - 2 * cov
         ns = 2 * (len(self.stirrups(True)) + len(self.stirrups(False)))
         R(16, g("RDT_D"), 2 * w + 2 * hh + 2 * HOOK, ns, [1000 * HOOK, 1000 * w, 1000 * hh], "Đai dầm")
         nt = 2 * (len(self.ties(True)) + len(self.ties(False)))
-        R(17, g("RDP_D"), w + 2 * HOOK, nt * self.n_gia, [1000 * HOOK, 1000 * w, 1000 * HOOK], "Đai phụ ngang dầm")
-        if self.has_tie2():
-            R(26, g("RDP_D"), w + 2 * HOOK, nt * 2, [1000 * HOOK, 1000 * w, 1000 * HOOK], "Đai phụ giữ lớp thép 2 dầm")
+        # đai phụ ngang: tại mỗi mức thép giá + giữ lớp thép 2 (mặt trên, mặt dưới) khi thép chủ 2 lớp
+        nlev = self.n_gia + (2 if self.has_tie2() else 0)
+        R(17, g("RDP_D"), w + 2 * HOOK, nt * nlev, [1000 * HOOK, 1000 * w, 1000 * HOOK], "Đai phụ ngang dầm")
         if self.has_vtie():
             R(18, g("RDP_D"), hh + 2 * HOOK, nt, [1000 * HOOK, 1000 * hh, 1000 * HOOK], "Đai phụ đứng dầm")
         # 19-23: cổ móng
