@@ -195,11 +195,17 @@ class Geo:
         z1 = rows_t[-1][0] - d / 2
         self.z_gia = [z0 + (i + 1) * (z1 - z0) / (self.n_gia + 1) for i in range(self.n_gia)]
         self.u_gia = w_in / 2 - self.dg / 2
-        self.cut_off = math.floor(min(self.D1, self.D2) / 2 / 0.1 + 1e-6) * 0.1
+        # đoạn cắt bớt mỗi đầu thanh ngắt = 1/2 khoảng từ mép dầm ngang tới mép móng (theo dầm đang cắt), làm tròn lên 100
+        self.cut_y = math.ceil(self.D2 / 2 / 0.1 - 1e-6) * 0.1
+        self.cut_x = math.ceil(self.D1 / 2 / 0.1 - 1e-6) * 0.1
 
     def rib_len(self, along_y):
         full = (self.g("B") if along_y else self.g("L")) - 2 * self.cov
-        return full, max(0.0, full - 2 * self.cut_off)
+        return full, max(0.0, full - 2 * (self.cut_y if along_y else self.cut_x))
+
+    def has_tie2(self):
+        """Thép chủ dầm 2 lớp -> thêm đai phụ ngang giữ lớp thứ 2 (mặt trên và mặt dưới)."""
+        return len(self.rows_b) > 1
 
     def rib_segments(self, along_y):
         """Đoạn dầm rải đai (bỏ vùng giao dầm + vát nách), toạ độ dọc dầm."""
@@ -377,6 +383,8 @@ class Geo:
         R(16, g("RDT_D"), 2 * w + 2 * hh + 2 * HOOK, ns, [1000 * HOOK, 1000 * w, 1000 * hh], "Đai dầm")
         nt = 2 * (len(self.ties(True)) + len(self.ties(False)))
         R(17, g("RDP_D"), w + 2 * HOOK, nt * self.n_gia, [1000 * HOOK, 1000 * w, 1000 * HOOK], "Đai phụ ngang dầm")
+        if self.has_tie2():
+            R(26, g("RDP_D"), w + 2 * HOOK, nt * 2, [1000 * HOOK, 1000 * w, 1000 * HOOK], "Đai phụ giữ lớp thép 2 dầm")
         if self.has_vtie():
             R(18, g("RDP_D"), hh + 2 * HOOK, nt, [1000 * HOOK, 1000 * hh, 1000 * HOOK], "Đai phụ đứng dầm")
         # 19-23: cổ móng

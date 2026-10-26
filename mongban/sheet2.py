@@ -7,7 +7,7 @@ import math
 from . import model, tables
 from .cad import Ctx
 from .geom import ANCHOR, TL_LEG, TL_OUT, TL_W, Geo, ceil_
-from .view import V, Callouts, brk, cut_line, dai_draw, note_at, ni, phi, rpl, sym, tie, title
+from .view import V, Callouts, brk, cut_line, dai_draw, note_at, ni, phi, rpl, sym, tick45, tie, title
 
 T_MESHH = "LƯỚI THÉP ĐẦU TRỤ"
 W_SLAB = 0.75          # bản móng thể hiện mỗi bên dầm trong mặt cắt 1-1, 2-2 (m)
@@ -79,43 +79,59 @@ def rib_section(c: Ctx, g: Geo, co: Callouts, ox, oy, along_y: bool, name: str):
             v.k * (2 * g.u_gia + g.dg + 0.008), 0.35, 1.4)
     if g.has_vtie():
         v.ln("DAI", 0.0, covb + g.dt, 0.0, hd - cov - g.dt)
-    # chú thích
+    um = max(abs(u) for u, _ in g.rows_b[0][1]) + g.dm / 2 + 0.004
+    if g.has_tie2():         # đai phụ giữ lớp thép thứ 2
+        for z in (g.rows_b[1][0], g.rows_t[1][0]):
+            zz = z + g.dm / 2 + 0.004 if z < hd / 2 else z - g.dm / 2 - 0.004
+            tie(c, "DAI", v.x(-um), v.y(zz), 1.0, 0.0, v.k * 2 * um, 0.35, 1.4)
+    # chú thích: thép chủ - gióng vuông góc tới từng thanh (không xẹt); đai - leader ngang có xẹt 45°
     pf, pc, pg = (10, 11, 12) if along_y else (13, 14, 15)
     xr = v.x(ur) + 2.0
     xl = v.x(ul) - 2.0
+    dmm = ni(p["RD_D"])
     rt0 = g.rows_t[0]
-    yt = v.y(hd) + 8.0
-    full = [(u, rt0[0]) for u, f in rt0[1] if f]
-    yt = v.y(hd) + 6.0
-    co([v.P(u, z) for u, z in full[-2:]], v.x(a / 2) + 3.0, yt + 5.5, 1, pf,
-       f"{len(full)}%%C{ni(p['RD_D'])}", tick=False)
+    full = [u for u, f in rt0[1] if f]
+    co([v.P(u, rt0[0]) for u in full], v.x(-a / 2) - 1.0, v.y(hd) + 6.0, -1, pf, f"{len(full)}%%C{dmm}",
+       tick=False, mode=True)
+    # bên phải, từ trên xuống
+    tags = []
     cut = [(u, z) for z, row in g.rows_t for u, f in row if not f]
     if cut:
-        co([v.P(u, z) for u, z in cut[-2:]], v.x(a / 2) + 3.0, yt, 1, pc, f"{len(cut)}%%C{ni(p['RD_D'])}",
-           tick=False)
-    y16 = v.y(hd) - 3.0
-    y12 = min(y16 - 6.0, v.y(g.z_gia[-1]) + 2.0)
-    y17 = y12 - 6.0
-    co([v.P(w2, 0.5 * (hs + hd) + 0.1)], xr, y16, 1, 16, phi(p["RDT_D"], p["RDT_S"]))
-    co([v.P(g.u_gia, g.z_gia[-1])], xr, y12, 1, pg, f"{2 * g.n_gia}%%C{ni(p['RG_D'])}")
-    co([v.P(0.25 * g.u_gia, g.z_gia[0] - g.dg / 2)], xr, y17, 1, 17, phi(p["RDP_D"], p["RDP_S"]))
+        z2 = cut[0][1]
+        tags.append(([v.P(u, z) for u, z in cut], v.y(z2), pc, f"{len(cut)}%%C{dmm}", False))
+    tags.append(([v.P(w2, 0.0)], None, 16, phi(p["RDT_D"], p["RDT_S"]), True))
+    tags.append(([v.P(g.u_gia, g.z_gia[-1])], v.y(g.z_gia[-1]), pg, f"{2 * g.n_gia}%%C{ni(p['RG_D'])}", False))
+    tags.append(([v.P(0.3 * g.u_gia, g.z_gia[0] - g.dg / 2 - 0.004)], None, 17, phi(p["RDP_D"], p["RDP_S"]), True))
+    if g.has_tie2():
+        zb = g.rows_b[1][0] + g.dm / 2 + 0.004
+        tags.append(([v.P(0.3 * um, zb)], v.y(zb), 26, phi(p["RDP_D"], p["RDP_S"]), True))
+    yprev = v.y(hd) + 2.0
+    for tg, ywant, num, txt, tk in tags:
+        by = yprev - 6.0 if ywant is None else min(ywant, yprev - 6.0)
+        if ywant is None and tg[0][1] == v.y(0.0):        # đai dầm: chạm nhánh đứng tại cao độ tag
+            tg = [(tg[0][0], by)]
+        co(tg, xr, by, 1, num, txt, tick=tk, mode=True)
+        yprev = by
     if g.has_vtie():
-        co([v.P(0.0, 0.5 * (hs + hd) + 0.1)], xl, v.y(0.5 * (hs + hd)) + 6.0, -1, 18, phi(p["RDP_D"], p["RDP_S"]))
+        zm = 0.5 * (hs + hd)
+        co([v.P(0.0, zm)], v.x(-a / 2) - 1.0, v.y(zm), -1, 18, phi(p["RDP_D"], p["RDP_S"]), mode=True)
     # thép bản: trái = ô 2 cạnh ngàm, phải = ô 4 cạnh ngàm
     ds = p["RS_D"]
     dl = [u for u in dots if u < -a / 2]
     dr = [u for u in dots if u > a / 2]
     if len(dl) >= 2:
-        co([v.P(dl[-1], zd_t), v.P(dl[-2], zd_t)], xl, v.y(hs) + 4.5, -1, pd_, phi(ds, p["RS_S2"]), tick=False)
+        co([v.P(dl[0], zd_t), v.P(dl[1], zd_t)], xl, v.y(hs) + 4.5, -1, pd_, phi(ds, p["RS_S2"]), tick=False,
+           mode=True)
     if len(dr) >= 2:
-        co([v.P(dr[0], zd_b), v.P(dr[1], zd_b)], xr, v.y(-tl) - 4.0, 1, pd_, phi(ds, p["RS_S1"]), tick=False)
-    co([v.P(ul + 0.15, zl_b)], xl, v.y(-tl) - 4.0, -1, pl_, phi(ds, p["RS_S2"]))
+        co([v.P(dr[-1], zd_b), v.P(dr[-2], zd_b)], xr, v.y(-tl) - 4.0, 1, pd_, phi(ds, p["RS_S1"]), tick=False,
+           mode=True)
+    co([v.P(ul + 0.12, zl_b)], xl, v.y(-tl) - 4.0, -1, pl_, phi(ds, p["RS_S2"]), mode=True)
     chl = [u for u in chs if u < -a / 2]
     chr_ = [u for u in chs if u > a / 2]
     if chl:
-        co([v.P(chl[-1], 0.5 * (zi_b + zi_t))], xl - 2.0, v.y(-tl) - 10.0, -1, 6, phi(p["RCH_D"], p["RCH_S2"]))
+        co([v.P(chl[0], 0.5 * (zi_b + zi_t))], xl, v.y(-tl) - 10.0, -1, 6, phi(p["RCH_D"], p["RCH_S2"]), mode=True)
     if chr_:
-        co([v.P(chr_[0], 0.5 * (zi_b + zi_t))], xr + 2.0, v.y(-tl) - 10.0, 1, 6, phi(p["RCH_D"], p["RCH_S1"]))
+        co([v.P(chr_[-1], 0.5 * (zi_b + zi_t))], xr, v.y(-tl) - 10.0, 1, 6, phi(p["RCH_D"], p["RCH_S1"]), mode=True)
     # kích thước
     xd = v.x(ul) - 4.0
     v.dimV((ul, -tl), (ul, 0.0), xd)
@@ -147,20 +163,26 @@ def haunch_section(c: Ctx, g: Geo, co: Callouts, ox, oy):
     for s in (-1, 1):
         v.ln("MAIN", s * bp, hd, s * bp, zt)
     brk(c, v.x(-bp), v.y(zt), v.x(bp), v.y(zt), w=1.0)
-    # thép 7 (U dài), 8 (U ngắn), 9 (đai vuông, các mức)
+    # 7: chữ U ôm ngoài; 8: chân đứng của họ thanh vuông góc mặt cắt; 9: các mức đai vuông (nét ngang)
     l7, l8 = g.l7(), g.l8()
     z7 = hd - cov
     rpl(c, "DAI", [v.P(-l7 / 2, cov), v.P(-l7 / 2, z7), v.P(l7 / 2, z7), v.P(l7 / 2, cov)], False, 0.6)
-    z8 = z7 - 0.03
-    rpl(c, "DAI", [v.P(-l8 / 2, cov + 0.05), v.P(-l8 / 2, z8), v.P(l8 / 2, z8), v.P(l8 / 2, cov + 0.05)], False, 0.6)
-    zs9 = [z8 - 0.05 - i * 0.2 for i in range(g.n9())]
+    n8 = g.n8()
+    u8 = [-l8 / 2 + (i + 1) * l8 / (n8 + 1) for i in range(n8)]
+    z8 = z7 - g.dt - 0.02
+    for u in u8:
+        v.ln("DAI", u, cov, u, z8)
+    zs9 = [z8 - 0.03 - i * 0.2 for i in range(g.n9())]
     for z in zs9:
-        v.ln("DAI", -l8 / 2 + 0.02, z, l8 / 2 - 0.02, z)
+        v.ln("DAI", -l8 / 2, z, l8 / 2, z)
     xr = v.x(ur) + 2.0
-    co([v.P(l7 / 2, 0.5 * (hs + hd))], xr, v.y(hd) + 5.0, 1, 7, f"4%%C{ni(p['RDT_D'])}")
-    co([v.P(l8 / 2, z8 - 0.12)], xr, v.y(0.5 * (hs + hd)), 1, 8, f"{g.n8()}%%C{ni(p['RDT_D'])}")
-    co([v.P(0.25 * l8, z) for z in zs9[:2]], xr, v.y(hs) - 2.5, 1, 9, f"{g.n9()}%%C{ni(p['RDT_D'])}", tick=False)
+    co([v.P(l7 / 2 - 0.1, z7)], xr, v.y(hd) + 4.0, 1, 7, f"4%%C{ni(p['RDT_D'])}", mode=True)
+    zt8 = z8 - 0.015
+    co([v.P(u, zt8) for u in u8], xr, v.y(zt8), 1, 8, f"{n8}%%C{ni(p['RDT_D'])}", mode=True)
+    u9 = 0.5 * (u8[len(u8) // 2 - 1] + u8[len(u8) // 2]) if len(u8) > 1 else 0.15
+    co([v.P(u9, z) for z in zs9], xr, v.y(zt8) - 6.0, 1, 9, f"{g.n9()}%%C{ni(p['RDT_D'])}", mode=True)
     xd = v.x(ul) - 4.0
+    v.dimV((ul, -tl), (ul, 0.0), xd)
     v.dimV((ul, 0.0), (ul, hs), xd)
     v.dimV((-lb, hs), (-lb, hd), xd)
     # vết cắt 4-4 (mặt bằng tại cao độ giữa dầm)
@@ -186,44 +208,43 @@ def haunch_plan(c: Ctx, g: Geo, co: Callouts, ox, oy):
     v.ln("TRUC", -R - 0.2, 0.0, R + 0.2, 0.0)
     v.ln("TRUC", 0.0, -R - 0.2, 0.0, R + 0.2)
     r2 = 1 / math.sqrt(2)
-    # 7: dọc 4 mặt vát
+    # 7: dọc 4 mặt vát, kéo dài qua góc hình thoi (thấy dạng chữ X ở 4 đỉnh)
     l7, l8 = g.l7(), g.l8()
     d7 = (a + e) / 2 - cov
-    p7 = []
+    tips = []
     for sx in (-1, 1):
         for sy in (-1, 1):
             mx, my = sx * d7, sy * d7
             ux, uy = -sx * r2, sy * r2
             v.ln("DAI", mx - ux * l7 / 2, my - uy * l7 / 2, mx + ux * l7 / 2, my + uy * l7 / 2)
-            p7.append(v.P(mx + ux * 0.42 * l7, my + uy * 0.42 * l7))
-    # 9: đai vuông (hình thoi cạnh l8)
-    rr = l8 * r2
-    v.pl("DAI", True, [(rr, 0.0), (0.0, rr), (-rr, 0.0), (0.0, -rr)])
-    # 8: 2 họ song song các cạnh thoi
+            for t in (-1, 1):
+                tips.append((mx + t * ux * l7 / 2, my + t * uy * l7 / 2))
+    # 8: 2 họ thanh song song các cạnh thoi, nằm trong thoi
     n8 = g.n8()
-    p8 = []
+    fams = []
     for fam in (1, -1):
-        for i in range(n8):
-            t = -rr + (i + 1) * 2 * rr / (n8 + 1)
-            # đường x + fam*y = t*... (song song cạnh thoi), trong thoi
-            ux, uy = (-r2, r2) if fam == 1 else (r2, r2)
-            nx, ny = (r2, r2) if fam == 1 else (r2, -r2)
-            mx, my = nx * t * r2, ny * t * r2
+        ux, uy = (-r2, r2) if fam == 1 else (r2, r2)
+        nx, ny = (r2, r2) if fam == 1 else (r2, -r2)
+        ts = [-l8 / 2 + (i + 1) * l8 / (n8 + 1) for i in range(n8)]
+        for t in ts:
+            mx, my = nx * t, ny * t
             v.ln("DAI", mx - ux * l8 / 2, my - uy * l8 / 2, mx + ux * l8 / 2, my + uy * l8 / 2)
-            if i == n8 - 1:
-                p8.append(v.P(mx + ux * 0.3 * l8, my + uy * 0.3 * l8))
-    # thép chủ cổ móng (chấm)
-    hb = g.bb / 2 - cov - g.g("RC_D") / 2000.0
-    m = g.m_bars()
-    rc = v.rbar(p["RC_D"])
-    for i in range(m):
-        t = -hb + i * 2 * hb / (m - 1)
-        for q in ((t, -hb), (t, hb), (-hb, t), (hb, t)):
-            v.disc("COTTHEP", q[0], q[1], rc)
+        fams.append((nx, ny, ux, uy, ts))
     xr = v.x(R) + 3.0
-    co([p7[3]], xr, v.y(R) - 2.0, 1, 7, f"4%%C{ni(p['RDT_D'])}")
-    co(p8, xr, v.y(0.3 * R), 1, 8, f"{2 * n8}%%C{ni(p['RDT_D'])}")
-    co([v.P(rr * 0.5, -rr * 0.5)], xr, v.y(-0.55 * R), 1, 9, phi(p["RDT_D"], 200))
+    top = sorted(tips, key=lambda q: -q[1])[:2]
+    yb = max(q[1] for q in top)
+    co([v.P(*q) for q in top], xr, v.y(yb), 1, 7, f"4%%C{ni(p['RDT_D'])}", mode=True)
+    # chú thích họ thanh 8: đường gióng vuông góc qua cả họ (có xẹt), nối ra tag
+    for (nx, ny, ux, uy, ts), yt in zip(fams, (0.35 * R, -0.45 * R)):
+        o = 0.25 * l8 * (1 if uy > 0 else -1)
+        p1 = (nx * ts[0] + ux * o, ny * ts[0] + uy * o)
+        p2 = (nx * (ts[-1] + 0.18) + ux * o, ny * (ts[-1] + 0.18) + uy * o)
+        with c.item(f"cross8{int(uy > 0)}", "Đường gióng thép 8"):
+            v.ln("CHU", p1[0], p1[1], p2[0], p2[1])
+            for t in ts:
+                q = v.P(nx * t + ux * o, ny * t + uy * o)
+                tick45(c, q[0], q[1])
+        co([v.P(*p2)], xr, v.y(p2[1]), 1, 8, f"{n8}%%C{ni(p['RDT_D'])}", tick=False, mode=True)
     v.dimH((-h - e, h), (-h, h), v.y(R) + 3.5)
     v.dimH((-h, h), (h, h), v.y(R) + 3.5)
     v.dimH((h, h), (h + e, h), v.y(R) + 3.5)
@@ -273,7 +294,9 @@ def pier_section(c: Ctx, g: Geo, co: Callouts, cx, cy):
     co([(cx + hb0, cy + 0.55 * hh)], bx, cy + 0.55 * hh, 1, 20, phi(p["RT_D"], p["RT_S"]), mode=True)
     if st:
         xi = -hb + max(st) * sp
-        co([(cx + xi + rt, cy + 0.15 * hh)], bx, cy + 0.15 * hh, 1, 21, phi(p["RP_D"], p["RP_S"]), mode=True)
+        sole = sorted(st) != sorted(m - 1 - j for j in st)         # đai phụ không đối xứng
+        co([(cx + xi + rt, cy + 0.15 * hh)], bx, cy + 0.15 * hh, 1, 21, phi(p["RP_D"], p["RP_S"]),
+           "SO LE" if sole else None, mode=True)
     if grp:
         co([(cx + 0.5 * (xo + yo), cy - 0.5 * (xo + yo))], bx, cy - 0.45 * hh, 1, 22,
            phi(p["RP_D"], p["RP_S"]), mode=True)
@@ -283,10 +306,10 @@ def pier_section(c: Ctx, g: Geo, co: Callouts, cx, cy):
         xf = cx - hh
         rpl(c, "COTTHEP", [(xf + lg, cy - wd / 2), (xf - out, cy - wd / 2), (xf - out, cy + wd / 2),
                            (xf + lg, cy + wd / 2)], False, 0.6)
-        co([(xf - out, cy + 0.2 * wd)], xf - out - 2.0, cy - hh - 3.0, -1, 24, phi(p["TL_D"], p["TL_S"]))
+        co([(xf - out, cy - 0.25 * wd)], xf - out - 1.5, cy - hh - 3.5, 1, 24, phi(p["TL_D"], p["TL_S"]), mode=True)
         from .cad import ensure_dimstyle
         nm = ensure_dimstyle(c.doc, 25)
-        c.dimV("DIM", (xf - out, cy - hh), (xf, cy - hh), xf - out - 3.0, dimname=nm)
+        c.dimH("DIM", (xf - out, cy + wd / 2), (xf, cy + wd / 2), cy + wd / 2 + 3.0, dimname=nm)
     from .cad import ensure_dimstyle
     nm = ensure_dimstyle(c.doc, 25)
     c.dimH("DIM", (cx - hh, cy + hh), (cx + hh, cy + hh), cy + hh + 9.5, dimname=nm)
@@ -384,37 +407,45 @@ def half_bb(c: Ctx, g: Geo, co: Callouts, xax, ytop):
             v.disc("DAI", px - xi + j * 2 * xi / nd, z - 0.015, rl)
     # thang leo (24) ở mặt cổ quay vào tim
     nl = g.n_ladder()
-    if nl:
-        s = p["TL_S"] / 1000.0
-        xf = px + bb / 2
-        for i in range(nl):
-            z = zt - i * s
-            v.ln("COTTHEP", xf - TL_LEG, z, xf + TL_OUT, z)
+    s_tl = p["TL_S"] / 1000.0
+    zs_tl = [zt - i * s_tl for i in range(nl)]
+    xf = px + bb / 2
+    for z in zs_tl:
+        v.ln("COTTHEP", xf - TL_LEG, z, xf + TL_OUT, z)
     # vết cắt 5-5 trên cổ móng
     zc = hd + 0.3 * (g.H - hd)
     cut_line(c, v.P(px - bb / 2 - 0.1, zc), v.P(px + bb / 2 + TL_OUT + 0.1, zc), "5", side=-1.0, ext=1.5)
-    # chú thích (trong khoảng trống phía trên dầm)
+    # chú thích - leader vuông góc
     d = p["RD_D"]
-    xa = v.x(px - bb / 2) - 2.0
     ztop = g.rows_t[0][0]
-    co([v.P(-L + 0.4, ztop)], v.x(-L) + 1.0, v.y(hd) + 7.0, 1, 13, f"{2 * g.n_full}%%C{ni(d)}")
+    xe = v.x(-L) + 2.0
+    co([v.P(-L + 0.4, ztop)], xe, v.y(hd) + 6.0, -1, 13, f"{2 * g.n_full}%%C{ni(d)}", tick=False, mode=True)
     if g.n_cut:
         z2 = g.rows_t[1][0] if len(g.rows_t) > 1 else ztop
-        co([v.P(-cut / 2 + 0.3, z2)], v.x(-L) + 1.0, v.y(hd) + 13.0, 1, 14, f"{2 * g.n_cut}%%C{ni(d)}")
-    co([v.P(-L + 0.9, g.z_gia[0])], v.x(-L) + 1.0, v.y(hd) + 19.0, 1, 15, f"{2 * g.n_gia}%%C{ni(p['RG_D'])}")
-    if sts:
-        co([v.P(sts[2], 0.5 * (hd + g.z_gia[0]))], v.x(-L) + 1.0, v.y(hd) + 25.0, 1, 16,
-           phi(p["RDT_D"], p["RDT_S"]))
-    xr = v.x(px + bb / 2 + TL_OUT) + 4.0
-    hz = g.hoop_zs()
-    co([v.P(px + xi, zt - 0.35 * (zt - hd))], xr, v.y(zt) - 6.0, 1, 19,
-       f"{int(p['RC_N'])}%%C{ni(p['RC_D'])}")
-    zh = hz[len(hz) // 2]
-    co([v.P(px, zh)], xr, v.y(zt) - 13.0, 1, 20, phi(p["RT_D"], p["RT_S"]))
-    co([v.P(px + xi, zt - 0.02)], xr, v.y(zt) + 2.0, 1, 23, phi(p["RL_D"], p["RL_S"]))
+        co([v.P(-cut / 2 + 0.3, z2)], xe, v.y(hd) + 12.0, -1, 14, f"{2 * g.n_cut}%%C{ni(d)}", tick=False,
+           mode=True)
+    x15 = -cut / 2 + 0.75
+    co([v.P(x15, g.z_gia[0])], xe, v.y(hd) + 18.0, -1, 15, f"{2 * g.n_gia}%%C{ni(p['RG_D'])}", mode=True)
+    s16 = [q for q in sts if q > x15 + 0.1]
+    if s16:
+        co([v.P(s16[0], 0.5 * (g.z_gia[0] + hd))], xe, v.y(hd) + 24.0, -1, 16, phi(p["RDT_D"], p["RDT_S"]),
+           mode=True)
+    # cổ móng: chú thích bên trái cổ; thang leo bên phải
+    xp = v.x(px - bb / 2) - 2.0
+    co([v.P(px - xi, zt - 0.02)], xp, v.y(zt - 0.02), -1, 23, phi(p["RL_D"], p["RL_S"]), mode=True)
+    y19 = v.y(zt) - 8.0
+    co([(v.x(px - xi), y19)], xp, y19, -1, 19, f"{int(p['RC_N'])}%%C{ni(p['RC_D'])}", tick=False, mode=True)
+    hz = [z for z in g.hoop_zs() if v.y(z) < y19 - 4.0]
+    if hz:
+        j = min(len(hz) - 1, 1)
+        sel = hz[j:j + 3]
+        y20 = 0.5 * (v.y(sel[0]) + v.y(sel[-1])) if len(sel) > 1 else v.y(sel[0]) - 2.0
+        y20 = min(y20, y19 - 6.0)
+        co([v.P(px - 0.55 * xi, z) for z in sel], xp, y20, -1, 20, phi(p["RT_D"], p["RT_S"]), mode=True)
     if nl:
-        z = zt - (nl // 2) * p["TL_S"] / 1000.0
-        co([v.P(px + bb / 2 + TL_OUT, z)], xr, v.y(zt) - 20.0, 1, 24, phi(p["TL_D"], p["TL_S"]))
+        xlt = xf + 0.6 * TL_OUT
+        co([v.P(xlt, z) for z in zs_tl], v.x(xf + TL_OUT) + 3.0, v.y(zs_tl[0]) + 3.0, 1, 24,
+           phi(p["TL_D"], p["TL_S"]), mode=True)
     # kích thước
     yd = v.y(-tl) - 5.0
     v.dimH((-L, 0.0), (px - bb / 2, 0.0), yd)
@@ -422,7 +453,6 @@ def half_bb(c: Ctx, g: Geo, co: Callouts, xax, ytop):
     v.dimH((px + bb / 2, 0.0), (0.0, 0.0), yd)
     xd = v.x(-L - ml) - 4.0
     v.dimV((-L, 0.0), (-L, hd), v.x(-L) - 3.5)
-    v.dimV((px - bb / 2, hd), (px - bb / 2, g.H), xa - 1.0)
     v.dimV((-L - ml, -tl), (-L - ml, 0.0), xd)
     sc_title(c, v.x(-L / 2), yd - 10.0, "1/2 MẶT CẮT B-B", den)
     return yd - 16.0

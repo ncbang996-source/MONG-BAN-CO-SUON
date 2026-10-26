@@ -17,8 +17,9 @@ assert abs(model.vol_cat(p) - 173.57) < 0.001 and abs(model.area_vai(p) - 368.73
 assert abs(model.area_vk(p) - 97.268) < 0.001
 res = export.build(p, os.path.join(ROOT, "assets", "frames", "KT-A3.dxf"))
 kgs = {int(d): w for d, _, w in res.geo.klc}
-# thép bản Ø14 và thép dầm Ø25 khớp sheet "KL thep mong"
-assert abs(kgs[14] - 3914.79) < 0.05 and abs(kgs[25] - 3090.24) < 0.05, kgs
+# thép bản Ø14 khớp sheet "KL thep mong"; Ø25 theo quy tắc cắt thép dầm = 1/2 ô ngoài của từng dầm, làm tròn
+# lên 100 (thanh ngắt 7050 / 8050 thay vì 7250 / 9250 của Excel: 3090.24 - 16 x 1.4 x 3.85 = 3004.00)
+assert abs(kgs[14] - 3914.79) < 0.05 and abs(kgs[25] - 3004.00) < 0.05, kgs
 d = tempfile.mkdtemp()
 export.save_dxf(res, os.path.join(d, "t.dxf"))
 data = export.pdf_bytes(res)

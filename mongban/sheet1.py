@@ -6,7 +6,7 @@ import math
 from . import model, tables
 from .cad import Ctx, txtw
 from .geom import Geo
-from .view import (V, Callouts, bolt_side, bolts_plan, cut_line, elev, marker, note_at, phi, sym, tick45,
+from .view import (V, Callouts, arrow2, bolt_side, bolts_plan, cut_line, elev, marker, note_at, phi, sym, sym_r, tick45,
                    title, vee)
 
 T_SOIL = "ĐẤT THỪA ĐẮP LẠI"
@@ -60,7 +60,12 @@ def outline_aa(v: V, g: Geo, u0=None):
         if x >= lo - 1e-9:
             v.ln(lay, x, z1, x, z2)
     h("MAIN", 0.0, -L, L)
-    h("MAIN", hd, -L, L)
+    # đỉnh dầm theo X phía sau: dừng tại mặt cổ móng; trong phạm vi cổ chỉ còn đỉnh dầm theo Y bị cắt
+    xs = [-L, -g.dx - b / 2, -g.dx + b / 2, g.dx - b / 2, g.dx + b / 2, L]
+    for i in (0, 2, 4):
+        h("MAIN", hd, xs[i], xs[i + 1])
+    for s in (-1, 1):
+        h("MAIN", hd, s * g.dx - a / 2, s * g.dx + a / 2)
     vl("MAIN", -L, 0.0, hd)
     vl("MAIN", L, 0.0, hd)
     # mặt trên bản (giữa các dầm theo Y bị cắt)
@@ -80,32 +85,50 @@ def outline_aa(v: V, g: Geo, u0=None):
     if g.hasHole:
         for s in (-1, 1):
             vl("MAIN", s * c / 2, 0.0, hs)
-    # bê tông lót
+    # bê tông lót: nhìn xuyên lỗ mở thấy lót phía sau -> nét liền; hatch chỉ ở phần bị cắt
     ml, tl = model.ML, model.TL
-    pcs = [(-L - ml, -(c / 2 - ml)), (c / 2 - ml, L + ml)] if g.hasHole and c > 2 * ml else [(-L - ml, L + ml)]
+    x0 = max(-L - ml, lo)
+    v.rect("HINH THUC", x0, -tl, L + ml, 0.0)
+    hole = g.hasHole and g.c > 2 * ml
+    pcs = [(-L - ml, -(c / 2 - ml)), (c / 2 - ml, L + ml)] if hole else [(-L - ml, L + ml)]
+    if hole:
+        for s in (-1, 1):
+            vl("HINH THUC", s * (c / 2 - ml), -tl, 0.0)
     for x1, x2 in pcs:
         x1 = max(x1, lo)
         if x2 - x1 < 1e-6:
             continue
-        v.rect("HINH THUC", x1, -tl, x2, 0.0)
         v.hatch("HATCH", [(x1, -tl), (x2, -tl), (x2, 0.0), (x1, 0.0)], "AR-CONC", 0.375 * v.k / 10.0)
 
 
-def ladder_aa(v: V, g: Geo, piers, label=True):
-    """Thang leo nhìn ngang trên các cổ móng (danh sách hoành độ mặt cổ, hướng nhô ra)."""
-    n = g.n_ladder()
-    if not n:
-        return None
+def ladder_zs(g: Geo):
     s = g.g("TL_S") / 1000.0
-    zs = [g.H - g.cov - i * s for i in range(n)]
-    out = None
-    for xf, sg in piers:
-        xo = xf + sg * 0.15
-        v.ln("CHU", xo, zs[-1], xo, zs[0])
-        for z in zs:
-            v.ln("CHU", xf, z, xo, z)
-        out = (v.x(xo), v.y(0.5 * (zs[0] + zs[-1])), sg)
-    return out
+    return [g.H - g.cov - i * s for i in range(g.n_ladder())]
+
+
+def ladder_aa(c: Ctx, v: V, g: Geo, xf, sg, label=T_LADDER):
+    """Thang leo nhìn ngang: bậc cắm vào cổ và nhô ra khỏi mặt cổ xf (sg: hướng nhô ra).
+    Chú thích: đường đứng qua đầu các bậc có dấu xẹt, leader ngang ở bậc trên cùng."""
+    zs = ladder_zs(g)
+    if not zs:
+        return None
+    from .geom import TL_OUT
+    for z in zs:
+        v.ln("COTTHEP", xf - sg * 0.05, z, xf + sg * TL_OUT, z)
+    xt = xf + sg * 0.6 * TL_OUT
+    if label:
+        with c.item("ladder", "Ghi chú thang leo"):
+            c.ln("CHU", v.x(xt), v.y(zs[-1]), v.x(xt), v.y(zs[0]), fixed1=True, fixed2=True)
+            for z in zs:
+                tick45(c, v.x(xt), v.y(z), fixed=True)
+            w = txtw(label, 2.0)
+            xe = v.x(xt) + sg * (w + 2.0)
+            zl = zs[0]
+            if abs(xe - v.x(0.0)) < 6.5 or (xe - v.x(0.0)) * (v.x(xt) - v.x(0.0)) < 0:
+                zl = zs[-1]                     # tránh ký hiệu đối xứng ở đỉnh trục -> ghi ở bậc dưới cùng
+            c.ln("CHU", v.x(xt), v.y(zl), xe, v.y(zl), fixed1=True)
+            c.txj("CHU", v.x(xt) + sg * 1.0, v.y(zl) + 0.8, 2.0, label, 0 if sg > 0 else 2)
+    return xt, zs
 
 
 def draw_section(c: Ctx, g: Geo):
@@ -147,13 +170,7 @@ def draw_section(c: Ctx, g: Geo):
         c.ln("CHU", xb, yb, xb + 6.0, yb, fixed1=True)
         c.tx("CHU", xb + 7.0, yb - 0.8, 1.6, p["BLN"])
     # thang leo trên cổ móng trái (trụ phía sau mặt cắt), mặt quay vào tim
-    lad = ladder_aa(v, g, [(-g.dx + g.bb / 2, 1)])
-    if lad:
-        with c.item("ladder", "Ghi chú thang leo"):
-            x0, y0, _ = lad
-            c.ln("CHU", x0, y0, x0 + 2.5, y0 - 2.5, fixed1=True)
-            c.ln("CHU", x0 + 2.5, y0 - 2.5, x0 + 3.0 + txtw(T_LADDER, 2.0), y0 - 2.5)
-            c.tx("CHU", x0 + 3.0, y0 - 1.8, 2.0, T_LADDER)
+    ladder_aa(c, v, g, -g.dx + g.bb / 2, 1)
     # cao độ
     elev(c, g.dimX2 - 17.4, g.ybase, f"-{fx(p['H1'], 2)}m")
     elev(c, g.dimX2 - 17.4, ygl, "%%p0.00")
@@ -315,24 +332,26 @@ def plan_outline(c: Ctx, g: Geo, v: V, bolts=True, lot=True):
 
 
 def draw_route(c: Ctx, g: Geo, cx, cy, lh, lx):
+    """Hướng tuyến đi qua tim móng (quy ước app cũ): đỡ - 2 chiều theo Y; néo góc - 2 tia lệch 10°,
+    phân giác hướng sang trái; néo dừng - 1 chiều."""
     ht = int(g.p["HT"])
     wr = txtw(T_ROUTE, 2.0)
+    a = max(4.6 + wr / 2, min(0.5 * lh, lh - 2.4 - wr / 2))
     if ht == 1:
         dlt = math.radians(10.0)
         sn, cs = math.sin(dlt), math.cos(dlt)
-        vee(c, cx, cy, cx + lh * sn, cy + lh * cs)
-        vee(c, cx, cy, cx + lh * sn, cy - lh * cs)
-        a = max(4.6 + wr / 2, min(0.5 * lh, lh - 2.4 - wr / 2))
-        c.txr("CHU", cx + a * sn - 2.4 * cs, cy + a * cs + 2.4 * sn, 2.0, T_ROUTE, 90.0 - 10.0)
+        vee(c, cx, cy, cx - lh * sn, cy + lh * cs)
+        vee(c, cx, cy, cx - lh * sn, cy - lh * cs)
+        c.txr("CHU", cx - a * sn + 2.4 * cs, cy + a * cs + 2.4 * sn, 2.0, T_ROUTE, 90.0 + 10.0)
         vee(c, cx, cy, cx - lx, cy)
         c.tx("CHU", cx - lx + 1.0, cy + 1.2, 2.0, T_BISECT)
     elif ht == 2:
         vee(c, cx, cy, cx, cy - lh)
-        c.txr("CHU", cx - 2.4, cy - 0.5 * lh, 2.0, T_ROUTE, 90.0)
+        c.txr("CHU", cx + 2.4, cy - a, 2.0, T_ROUTE, 90.0)
     else:
         vee(c, cx, cy, cx, cy - lh)
         vee(c, cx, cy, cx, cy + lh)
-        c.txr("CHU", cx - 2.4, cy + max(1.5 + wr / 2, min(0.5 * lh, lh - 2.4 - wr / 2)), 2.0, T_ROUTE, 90.0)
+        c.txr("CHU", cx + 2.4, cy + a, 2.0, T_ROUTE, 90.0)
 
 
 def dim_plan(c: Ctx, g: Geo, v: V):
@@ -345,11 +364,11 @@ def dim_plan(c: Ctx, g: Geo, v: V):
         tp = None
         if i in (0, len(ys) - 2):
             yy = v.y(ys[i]) - 1.0 - w100 / 2 if i == 0 else v.y(ys[i + 1]) + 1.0 + w100 / 2
-            tp = (x0 - 5.0 - 2.0, yy)
-        v.dimV((-L, ys[i]), (-L, ys[i + 1]), x0 - 5.0, tp)
+            tp = (x0 - 10.0 - 2.0, yy)
+        v.dimV((-L, ys[i]), (-L, ys[i + 1]), x0 - 10.0, tp)
     for y1, y2 in ((-B, -g.dy), (-g.dy, g.dy), (g.dy, B)):
-        v.dimV((-L, y1), (-g.dx, y2), x0 - 12.0)
-    v.dimV((-L, -B), (-L, B), x0 - 19.0)
+        v.dimV((-L, y1), (-g.dx, y2), x0 - 17.0)
+    v.dimV((-L, -B), (-L, B), x0 - 24.0)
     # dưới
     y0 = v.y(-B - ml)
     xs = [-L - ml, -L, -g.dx - a / 2, -g.dx + a / 2, g.dx - a / 2, g.dx + a / 2, L, L + ml]
@@ -385,11 +404,14 @@ def draw_plan(c: Ctx, g: Geo, detail: bool):
     c.ci("CHU", cx, cy, 1.2)
     with c.item("axis", "Ghi chú tim móng"):
         xh = cx - k * g.c / 2 - 2.0 if g.hasHole else cx
-        c.pl("CHU", False, [(cx, cy), (xh - 3.0, cy - 4.7), (xh - 17.4, cy - 4.7)], fixed=(0,))
-        c.tx("CHU", xh - 17.7, cy - 3.8, 2.0, T_AXIS)
-    draw_route(c, g, cx - k * 0.35 * g.dx, cy, k * g.Bh - 1.0, k * (g.dx - g.a / 2) - 1.0)
+        sg = -1.0 if int(g.p["HT"]) == 1 else 1.0         # néo góc: chữ phân giác ở trên trục -> ghi tim móng ở dưới
+        c.pl("CHU", False, [(cx, cy), (xh - 3.0, cy + sg * 4.7), (xh - 17.4, cy + sg * 4.7)], fixed=(0,))
+        c.tx("CHU", xh - 17.7, cy + sg * 4.7 + 0.9, 2.0, T_AXIS)
+    draw_route(c, g, cx, cy, k * g.Bh - 1.0, k * g.Lh - 1.0)
+    sym(c, cx, v.y(g.Bh + model.ML) + 3.0)
+    sym_r(c, v.x(-g.Lh - model.ML) - 3.0, cy, 90.0)
     # ký hiệu mặt cắt A-A
-    xl, xr = v.x(-g.Lh - model.ML) - 31.0, v.x(g.Lh + model.ML) + 22.0
+    xl, xr = v.x(-g.Lh - model.ML) - 36.0, v.x(g.Lh + model.ML) + 22.0
     if detail:
         xr = v.x(g.Lh + model.ML) + 4.0
     marker(c, xl, cy, 1.0, "A")
@@ -417,13 +439,14 @@ def plan_marks(c: Ctx, g: Geo, v: V):
 
 
 def plan_bars(c: Ctx, g: Geo, v: V):
-    """Thép đại diện trên mặt bằng (nửa phải): thép bản các vùng, thép xiên góc lỗ, thép chủ dầm."""
+    """Thép đại diện trên mặt bằng (nửa phải): thép bản các vùng, thép xiên góc lỗ, thép chủ dầm.
+    Leader dùng các đoạn vuông góc; đường rải thép có mũi tên 2 đầu."""
     p = g.p
     co = Callouts(c, g)
     L, B, a, cov = g.Lh, g.Bh, g.a, g.cov
     d = p["RS_D"]
     xr = v.x(L + model.ML) + 3.0
-    used = [v.y(0.0)]
+    used = [v.y(0.0), v.y(g.dy) + 4.5, v.y(g.dy) - 4.5]
 
     def mid(lst):
         return lst[len(lst) // 2] if lst else None
@@ -436,31 +459,28 @@ def plan_bars(c: Ctx, g: Geo, v: V):
         used.append(y)
         return y
 
-    used += [v.y(g.dy) + 4.5, v.y(g.dy) - 4.5]
-    # --- thanh theo X (thép 3, 4) ở nửa trên, chú thích bên phải
+    # --- thanh theo X (thép 3, 4) ở nửa trên: đường rải đứng gần mép phải
     zones = []
     for z0, z1, kd in g.zones(B, g.dy):
         if z0 >= -1e-9:
-            ys = [y for y in g.ys3 if z0 < y < z1]
-            zones.append((3, ys, kd))
+            zones.append((3, [y for y in g.ys3 if z0 < y < z1], kd))
     if g.hasHole:
         zones.append((4, [y for y in g.ys4 if y >= -1e-9] or g.ys4, "in"))
+    xm = L - 0.12 * (L - g.dx - a / 2)
     for pos, ys, kd in sorted(zones, key=lambda z: -max(z[1]) if z[1] else 0):
         if not ys:
             continue
         y = mid(ys)
         x0 = 0.0 if pos == 3 else g.c / 2 + cov
         v.ln("COTTHEP", x0, y, L - cov, y)
-        xm = L - 0.12 * (L - g.dx - a / 2)
-        yy = ys if pos == 3 else (g.ys4 if g.ys4 else ys)
-        v.ln("CHU", xm, min(yy), xm, max(yy))
-        for q in (min(yy), max(yy)):
-            tick45(c, v.x(xm), v.y(q))
+        yy = ys if pos == 3 else g.ys4
+        arrow2(c, v.x(xm), v.y(min(yy)), v.x(xm), v.y(max(yy)))
         c.ci("CHU", v.x(xm), v.y(y), 0.5)
         s = p["RS_S2"] if kd == "out" else p["RS_S1"]
-        n = 2 * len(yy) if pos == 3 else 4 * len(yy) // 2
-        co([v.P(xm, y)], xr, tag_y(v.y(y)), 1, pos, phi(d, s), f"SL:{n}%%C{int(d)} - 2 LỚP", tick=False)
-    # --- thanh theo Y (thép 1, 2) ở nửa dưới, chú thích bên phải phía dưới
+        n = 2 * len(yy)
+        co([v.P(xm, y)], xr, tag_y(v.y(y)), 1, pos, phi(d, s), f"SL:{n}%%C{int(d)} - 2 LỚP", tick=False,
+           mode=True)
+    # --- thanh theo Y (thép 1, 2) ở nửa dưới: đường rải ngang gần mép dưới, leader ngang chạm thanh
     zones = []
     for z0, z1, kd in g.zones(L, g.dx):
         if z0 >= -1e-9:
@@ -468,7 +488,8 @@ def plan_bars(c: Ctx, g: Geo, v: V):
     if g.hasHole:
         zones.append((2, [x for x in g.xs2 if x >= -1e-9] or g.xs2, "in"))
     ybar = -B + 0.12 * g.D2
-    yq = [v.y(-g.dy) + 4.0]
+    yq = v.y(-g.dy) + 4.0
+    ylo = v.y(-B + cov) + 1.5
     for pos, xs, kd in sorted(zones, key=lambda z: min(z[1]) if z[1] else 0):
         if not xs:
             continue
@@ -476,58 +497,53 @@ def plan_bars(c: Ctx, g: Geo, v: V):
         y1 = 0.0 if pos == 1 else -g.c / 2 - cov
         v.ln("COTTHEP", x, -B + cov, x, y1)
         xx = xs if pos == 1 else g.xs2
-        v.ln("CHU", min(xx), ybar, max(xx), ybar)
-        for q in (min(xx), max(xx)):
-            tick45(c, v.x(q), v.y(ybar))
+        arrow2(c, v.x(min(xx)), v.y(ybar), v.x(max(xx)), v.y(ybar))
         c.ci("CHU", v.x(x), v.y(ybar), 0.5)
         s = p["RS_S2"] if kd == "out" else p["RS_S1"]
-        n = 2 * len(xx)
-        yq[0] -= 9.0
-        co([v.P(x, ybar)], xr, yq[0], 1, pos, phi(d, s),
-           f"SL:{n}%%C{int(d)} - 2 LỚP", tick=False)
+        yq -= 9.0
+        by = max(ylo, yq)
+        co([(v.x(x), by)], xr, by, 1, pos, phi(d, s), f"SL:{2 * len(xx)}%%C{int(d)} - 2 LỚP", mode=True)
     # --- thép xiên góc lỗ (5) ở góc trên phải của lỗ
     if g.hasHole and g.n5:
         m = max(1, g.n5 // 8)
         cc = g.c / 2
         hl = g.l5 / 2
         s5 = p["RS_S1"] / 2000.0
+        r2 = 1 / math.sqrt(2)
         pts = []
         for j in range(m):
             t = cov * math.sqrt(2) + 0.05 + j * s5
-            ox, oy = cc + t / math.sqrt(2), cc + t / math.sqrt(2)
-            ux, uy = -1 / math.sqrt(2), 1 / math.sqrt(2)
-            v.ln("COTTHEP", ox - ux * hl, oy - uy * hl, ox + ux * hl, oy + uy * hl)
-            pts.append(v.P(ox + ux * 0.25 * hl, oy + uy * 0.25 * hl))
-        co([pts[0]], v.x(cc + 0.3), v.y(cc - 0.15), 1, 5, f"{g.n5 // 4}%%C{int(d)}")
-    # --- thép chủ dầm theo Y (10, 11) trên dầm phải, phía trên dầm X; theo X (13, 14) trên dầm trên, bên phải
+            ox, oy = cc + t * r2, cc + t * r2
+            v.ln("COTTHEP", ox + r2 * hl, oy - r2 * hl, ox - r2 * hl, oy + r2 * hl)
+            pts.append(v.P(ox + r2 * 0.6 * hl, oy - r2 * 0.6 * hl))
+        co([pts[-1]], v.x(cc + hl + 0.2), pts[-1][1] - 3.0, 1, 5, f"{g.n5 // 4}%%C{int(d)}", mode=True)
+    # --- thép chủ dầm: vẽ từ trục đối xứng tới đầu dầm
     ws = a - 2 * cov - 2 * g.dt
     full_y, cut_y = g.rib_len(True)
     full_x, cut_x = g.rib_len(False)
     nf, nc = g.n_full, g.n_cut
     us_f = [(-ws / 2 + (i + 0.5) * ws / nf) for i in range(nf)]
     us_c = [(-ws / 2 + (i + 0.5) * ws / max(1, nc)) * 0.7 for i in range(nc)]
-    y0 = g.dy + a / 2 + g.e
+    dm = int(p["RD_D"])
     for u in us_f:
-        v.ln("COTTHEP", g.dx + u, y0, g.dx + u, full_y / 2)
+        v.ln("COTTHEP", g.dx + u, 0.0, g.dx + u, full_y / 2)
     for u in us_c:
-        v.ln("COTTHEP", g.dx + u, y0, g.dx + u, cut_y / 2)
+        v.ln("COTTHEP", g.dx + u, 0.0, g.dx + u, cut_y / 2)
+    ex = v.x(g.dx + a / 2) + 0.8
     yt = 0.5 * (cut_y / 2 + full_y / 2)
-    tl = [v.P(g.dx + u, yt) for u in us_f]
-    co(tl, v.x(g.dx + a / 2), v.y(yt), 1, 10, f"{nf}%%C{int(p['RD_D'])}", tick=True, mode=True)
+    co([v.P(g.dx + u, yt) for u in us_f], ex, v.y(yt), 1, 10, f"{nf}%%C{dm}", mode=True)
     if nc:
-        yc = 0.5 * (y0 + cut_y / 2)
-        co([v.P(g.dx + u, yc) for u in us_c], v.x(g.dx + a / 2), v.y(yc), 1, 11,
-           f"{nc}%%C{int(p['RD_D'])}", tick=True, mode=True)
-    x0 = g.dx + a / 2 + g.e
+        yc = 0.5 * (g.dy + g.a / 2 + g.e + cut_y / 2)
+        co([v.P(g.dx + u, yc) for u in us_c], ex, v.y(yc), 1, 11, f"{nc}%%C{dm}", mode=True)
     for u in us_f:
-        v.ln("COTTHEP", x0, g.dy + u, full_x / 2, g.dy + u)
+        v.ln("COTTHEP", 0.0, g.dy + u, full_x / 2, g.dy + u)
     for u in us_c:
-        v.ln("COTTHEP", x0, g.dy + u, cut_x / 2, g.dy + u)
+        v.ln("COTTHEP", 0.0, g.dy + u, cut_x / 2, g.dy + u)
     xt = 0.5 * (cut_x / 2 + full_x / 2)
-    co([v.P(xt, g.dy + us_f[-1])], xr, v.y(g.dy) + 4.5, 1, 13, f"{nf}%%C{int(p['RD_D'])}", mode=True)
+    co([v.P(xt, g.dy + u) for u in us_f], xr, v.y(g.dy) + 4.5, 1, 13, f"{nf}%%C{dm}", mode=True)
     if nc:
-        co([v.P(0.5 * (x0 + cut_x / 2), g.dy + us_c[0])], xr, v.y(g.dy) - 4.5, 1, 14,
-           f"{nc}%%C{int(p['RD_D'])}", mode=True)
+        xc = 0.5 * (g.dx + a / 2 + g.e + cut_x / 2)
+        co([v.P(xc, g.dy + u) for u in us_c], xr, v.y(g.dy) - 4.5, 1, 14, f"{nc}%%C{dm}", mode=True)
 
 
 # ---------------------------------------------------------------------------

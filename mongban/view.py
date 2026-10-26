@@ -78,6 +78,28 @@ def sym(c: Ctx, x, y):
         c.pl("CHU", False, [(x - s * 3.817, y + 2.996), (x - s * 5.699, y + 0.599)], width=0.5)
 
 
+def sym_r(c: Ctx, x, y, ang):
+    """Ký hiệu đối xứng xoay góc ang (độ) quanh giao điểm."""
+    ca, sa = math.cos(math.radians(ang)), math.sin(math.radians(ang))
+    T = lambda u, w: (x + u * ca - w * sa, y + u * sa + w * ca)
+    for s in (-1.0, 1.0):
+        a, b = T(s * 2.836, -2.226), T(-s * 3.817, 2.996)
+        c.ln("CHU", a[0], a[1], b[0], b[1])
+        c.pl("CHU", False, [b, T(-s * 5.699, 0.599)], width=0.5)
+
+
+def arrow2(c: Ctx, x1, y1, x2, y2, hl=1.2, hw=0.45):
+    """Đường rải thép: đoạn thẳng, 2 đầu mũi tên hở."""
+    c.ln("CHU", x1, y1, x2, y2)
+    d = math.hypot(x2 - x1, y2 - y1)
+    if d < 1e-9:
+        return
+    ux, uy = (x2 - x1) / d, (y2 - y1) / d
+    for px, py, sx in ((x2, y2, 1.0), (x1, y1, -1.0)):
+        bx, by = px - sx * ux * hl, py - sx * uy * hl
+        c.pl("CHU", False, [(bx - uy * hw, by + ux * hw), (px, py), (bx + uy * hw, by - ux * hw)])
+
+
 def marker(c: Ctx, mx, my, sgn, txt, ang=0.0, mlen=7.76):
     """Ký hiệu mặt cắt: thanh đậm dọc vết cắt + mũi tên hướng nhìn + chữ.
     ang = 0: vết cắt nằm ngang, nhìn lên; sgn: thanh kéo về phía +1 / -1 theo vết cắt."""
