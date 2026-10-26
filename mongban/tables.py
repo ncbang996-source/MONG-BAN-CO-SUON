@@ -1,0 +1,193 @@
+"""Bảng thống kê cốt thép (có hình dạng thanh) và bảng tổng kê khối lượng 01 vị trí móng."""
+from __future__ import annotations
+
+from . import model
+from .cad import Ctx
+from .view import ni, rpl, tie
+
+T_TBL = "BẢNG THỐNG KÊ CỐT THÉP (CHO 01 MÓNG)"
+T_TBLH = ["SỐ HIỆU", "HÌNH DẠNG - KÍCH THƯỚC (mm)", "%%C (mm)", "CHIỀU DÀI 1 THANH (mm)", "SỐ LƯỢNG",
+          "TỔNG C.DÀI (m)", "KL (kg)"]
+CW = [10.0, 44.0, 10.0, 18.0, 15.0, 18.0, 17.0]
+STRAIGHT = (1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 15, 23)
+TALL = (9, 16, 20, 22)
+
+
+def lbl(c: Ctx, x, y, s, rot=0.0):
+    if rot:
+        c.txr("BANG", x, y, 1.3, s, rot)
+    else:
+        c.txc("BANG", x, y, 1.3, s)
+
+
+def row_h(pos, base):
+    if pos in STRAIGHT:
+        return base
+    if pos in TALL:
+        return base * 1.9
+    return base * 1.45
+
+
+def shape(c: Ctx, r, x, y, w, h):
+    """Hình dạng thanh thép trong ô (x, y) rộng w cao h."""
+    pos, d, ln = r["pos"], r["dims"], r["len"]
+    yc, xm, lay = y + h / 2, x + w / 2, "BANG"
+    if pos in STRAIGHT:
+        c.ln(lay, x + 4, yc - 0.6, x + w - 4, yc - 0.6)
+        lbl(c, xm, yc + 0.9, ni(ln))
+    elif pos in (6, 7, 8, 24):
+        # chữ U: 2 chân d0, d1, thân d2 (thanh chống: chân nằm ngang)
+        hu = min(h - 3.2, 6.0)
+        x0, x1 = xm - 11.0, xm + 11.0
+        y0 = yc - hu / 2
+        if pos == 6:   # thanh chống: thân đứng, 2 chân ngang
+            yb, yt = yc - hu / 2, yc + hu / 2
+            rpl(c, lay, [(xm + 5.0, yb), (xm, yb), (xm, yt), (xm + 5.0, yt)], False, 0.4)
+            lbl(c, xm - 2.2, yc, ni(d[2]), 90.0)
+            lbl(c, xm + 3.0, yb + 0.9, ni(d[0]))
+            lbl(c, xm + 3.0, yt + 0.9, ni(d[1]))
+            return
+        rpl(c, lay, [(x0, y0 + hu), (x0, y0), (x1, y0), (x1, y0 + hu)], False, 0.5)
+        lbl(c, xm, y0 + 0.9, ni(d[2]))
+        lbl(c, x0 - 1.4, y0 + hu / 2, ni(d[0]), 90.0)
+        lbl(c, x1 + 1.4, y0 + hu / 2, ni(d[1]), 90.0)
+    elif pos in (9, 20):
+        s = min(h - 3.5, 9.0)
+        x0, y0 = xm - s / 2, yc - s / 2
+        rpl(c, lay, [(x0, y0), (x0 + s, y0), (x0 + s, y0 + s), (x0, y0 + s)], True, 0.06 * s)
+        c.ln(lay, x0 + s, y0 + 0.14 * s, x0 + 0.87 * s, y0 + 0.27 * s)
+        c.ln(lay, x0 + 0.86 * s, y0, x0 + 0.73 * s, y0 + 0.13 * s)
+        lbl(c, xm, y0 + s + 0.9, ni(d[1]))
+        lbl(c, x0 - 1.5, yc, ni(d[1]), 90.0)
+        lbl(c, x0 + s + 3.5, y0 + 0.8, ni(d[0]))
+    elif pos == 16:
+        hh = min(h - 3.5, 9.0)
+        ww = max(3.0, min(16.0, hh * d[1] / max(1.0, d[2])))
+        x0, y0 = xm - ww / 2, yc - hh / 2
+        rpl(c, lay, [(x0, y0), (x0 + ww, y0), (x0 + ww, y0 + hh), (x0, y0 + hh)], True, 0.4)
+        c.ln(lay, x0 + ww, y0 + 0.9, x0 + ww - 1.0, y0 + 1.9)
+        c.ln(lay, x0 + ww - 0.9, y0, x0 + ww - 1.9, y0 + 1.0)
+        lbl(c, xm, y0 + hh + 0.9, ni(d[1]))
+        lbl(c, x0 - 1.5, yc, ni(d[2]), 90.0)
+        lbl(c, x0 + ww + 3.5, y0 + 0.8, ni(d[0]))
+    elif pos in (17, 18, 21):
+        x0, x1 = x + 0.15 * w + 3.0, x + w - 0.15 * w - 3.0
+        tie(c, lay, x0, yc - 1.5, 1.0, 0.0, x1 - x0, 0.7, 2.0)
+        lbl(c, xm, yc + 0.2, ni(d[1]))
+        lbl(c, x0 - 3.0, yc - 1.3, ni(d[0]))
+        lbl(c, x1 + 3.0, yc - 1.3, ni(d[2]))
+    elif pos == 19:
+        x0, x1 = x + 5.0, x + w - 5.0
+        yb = yc - 1.6
+        rpl(c, lay, [(x0, yb + 3.2), (x0, yb), (x1, yb)], False, 0.4)
+        lbl(c, xm, yb + 0.9, ni(d[1]))
+        lbl(c, x0 + 2.4, yb + 3.0, ni(d[0]))
+    elif pos == 22:
+        s = min(h - 3.5, 9.0) / 2
+        x0 = s * (0.5 * d[0] / (0.5 * d[0] + d[1] / 1.41421))
+        c.pl(lay, True, [(xm - x0, yc + s), (xm + x0, yc + s), (xm + s, yc + x0), (xm + s, yc - x0),
+                         (xm + x0, yc - s), (xm - x0, yc - s), (xm - s, yc - x0), (xm - s, yc + x0)])
+        lbl(c, xm, yc + s + 0.9, ni(d[0]))
+        lbl(c, xm + s + 3.5, yc + s - 1.0, ni(d[1]))
+        lbl(c, xm - s - 3.0, yc - s + 1.0, ni(d[2]))
+
+
+def steel_table(c: Ctx, g, tx, ty, ybot):
+    """Bảng thống kê thép, đỉnh tại ty, co chiều cao dòng để đáy bảng không thấp hơn ybot."""
+    rows = g.kl
+    hh = 10.0
+    base = 6.4
+    tot = sum(row_h(r["pos"], 1.0) for r in rows)
+    base = max(4.2, min(base, (ty - hh - 6.0 - ybot) / tot))
+    hs = [row_h(r["pos"], base) for r in rows]
+    wcol = sum(CW)
+    with c.table("table", "Bảng thống kê cốt thép"):
+        c.txj("BANG", tx + wcol / 2, ty + 2.2, 2.5, T_TBL, 1, underline=True)
+        c.ln("BANG", tx, ty, tx + wcol, ty)
+        c.ln("BANG", tx, ty - hh, tx + wcol, ty - hh)
+        y = ty - hh
+        for h in hs:
+            y -= h
+            c.ln("BANG", tx, y, tx + wcol, y)
+        yend = y
+        xs = tx
+        c.ln("BANG", xs, ty, xs, yend - 6.0)
+        for i, w in enumerate(CW):
+            xs += w
+            c.ln("BANG", xs, ty, xs, yend if i < len(CW) - 2 else yend - 6.0)
+        xs = tx
+        for i, w in enumerate(CW):
+            words = T_TBLH[i].split(" ")
+            lines, cur = [], ""
+            for wd in words:              # ngắt dòng tiêu đề theo bề rộng cột
+                t = (cur + " " + wd).strip()
+                from .cad import txtw
+                if cur and txtw(t, 1.4) > w - 1.5:
+                    lines.append(cur)
+                    cur = wd
+                else:
+                    cur = t
+            lines.append(cur)
+            y0 = ty - hh / 2 + (len(lines) - 1) * 1.0
+            for j, t in enumerate(lines):
+                c.txc("BANG", xs + w / 2, y0 - 2.0 * j, 1.4, t)
+            xs += w
+        y = ty - hh
+        ssum = 0.0
+        for r, h in zip(rows, hs):
+            y -= h
+            ym = y + h / 2
+            ssum += r["kg"]
+            c.txc("BANG", tx + CW[0] / 2, ym, 1.8, g.sq(r["pos"]))
+            shape(c, r, tx + CW[0], y, CW[1], h)
+            xs = tx + CW[0] + CW[1]
+            vals = [ni(r["dia"]), ni(r["len"]), r["qty"], f"{r['tot']:.2f}", f"{r['kg']:.2f}"]
+            for v, w in zip(vals, CW[2:]):
+                c.txc("BANG", xs + w / 2, ym, 1.6, v)
+                xs += w
+        c.ln("BANG", tx, yend - 6.0, tx + wcol, yend - 6.0)
+        c.txj("BANG", tx + 3.0, yend - 4.2, 1.6, "CỘNG", 0)
+        c.txc("BANG", tx + wcol - CW[-1] / 2, yend - 3.4, 1.6, f"{ssum:.2f}")
+    return yend - 6.0
+
+
+def summary_cols(g):
+    p = g.p
+    cls = [x for x in g.klc if x[2] > 1e-6]
+    tot = sum(x[2] for x in cls)
+    cols = [(p["BTM"], "(m3)", 14.0, f"{model.vol_mong(p):.2f}"),
+            (p["BTL"], "(m3)", 14.0, f"{model.vol_lot(p):.2f}")]
+    for d, _, w in cls:
+        cols.append((f"%%C{int(d + 0.5)}", "(kg)", 13.0, f"{w:.2f}"))
+    if cls:
+        cols.append(("TỔNG K.LƯỢNG", "THÉP (kg)", 18.0, f"{tot:.2f}"))
+    if g.hasCushion:
+        cols.append(("K.LƯỢNG", "ĐỆM CÁT (m3)", 17.0, f"{model.vol_cat(p):.2f}"))
+        cols.append(("DIỆN TÍCH", "VẢI ĐỊA (m2)", 17.0, f"{model.area_vai(p):.2f}"))
+    cols.append(("BULONG", "NEO", 15.0, model.bolt_text(p)))
+    return cols
+
+
+def summary(c: Ctx, g, xr, y0):
+    """Bảng tổng kê, mép phải tại xr, đỉnh tại y0."""
+    cols = summary_cols(g)
+    w = sum(x[2] for x in cols)
+    hh, rh = 12.0, 8.0
+    x0 = xr - w
+    with c.table("summary", "Bảng tổng kê"):
+        c.txj("BANG", x0 + w / 2, y0 + 1.6, 2.2, "BẢNG TỔNG KÊ KHỐI LƯỢNG CHO 01 VỊ TRÍ MÓNG", 1, underline=True)
+        for y in (y0, y0 - hh, y0 - hh - rh):
+            c.ln("BANG", x0, y, xr, y)
+        xs = x0
+        c.ln("BANG", xs, y0, xs, y0 - hh - rh)
+        for col in cols:
+            xs += col[2]
+            c.ln("BANG", xs, y0, xs, y0 - hh - rh)
+        xs = x0
+        for col in cols:
+            xm = xs + col[2] / 2
+            c.txc("BANG", xm, y0 - 4.0, 1.5, col[0])
+            c.txc("BANG", xm, y0 - 8.5, 1.5, col[1])
+            c.txc("BANG", xm, y0 - hh - 4.0, 1.8, col[3])
+            xs += col[2]
+    return y0 - hh - rh
