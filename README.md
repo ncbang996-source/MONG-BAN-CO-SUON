@@ -36,7 +36,7 @@ App Windows chạy offline, vẽ nhanh bản vẽ **móng bản có dầm (móng
 - **Đền bù:** rộng B + 1, dài L + 1.
 - **Thép:** số thanh và chiều dài theo quy tắc sheet `KL thep mong`, khối lượng tính từ đúng các thanh vẽ ra.
   - Thép bản theo phương cạnh dài nằm lớp ngoài cùng. Thanh chống đặt theo phương cạnh ngắn.
-  - Thép chủ dầm: số thanh dài suốt mỗi mặt là n/2 (n chia hết 4) hoặc INT(n/2) + 1, số còn lại là thanh ngắt. Thanh ngắt cắt mỗi đầu ½ khoảng mép dầm → mép móng, làm tròn lên 100, tính từ mép móng. Từ 10 thanh trở lên thì cắt so le.
+  - Thép chủ dầm: dưới 5 thanh mỗi mặt thì không cắt; từ 5 thanh, số thanh dài suốt là n/2 (n chia hết 4) hoặc INT(n/2) + 1, số còn lại là thanh ngắt, đặt so le (thanh góc luôn dài suốt). Thanh ngắt cắt mỗi đầu ½ khoảng mép dầm → mép móng, làm tròn lên 100, tính từ mép móng. Từ 10 thanh trở lên thì cắt so le.
   - Khoảng hở ngang thép chủ ≥ 40 mm, không đủ thì thêm hàng (hàng dưới tối thiểu 2 thanh). Hàng dưới > 2 thanh thì chọn "các hàng đều nhau" hoặc "đầy hàng ngoài".
   - Đoạn neo thép chủ cổ móng cố định 500. Thang leo đặt ở 2 trụ chéo nhau khi H2 > 1.5 m.
 

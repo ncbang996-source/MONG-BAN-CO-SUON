@@ -21,7 +21,8 @@ BIG = dict(L1=6, L2=6, B=13.5, L=15, A=0.6, HD=1.2, HS=0.5, C=1.5, E=0.5, BB=1.0
            HC=0.7, RS_S2=140, RS_S1=200, RCH_S2=420, RCH_S1=600, RC_N=32, MPIT=0.6)
 CASES = {"mau": {}, "lon": BIG, "n7": dict(RD_N=7), "n10": dict(RD_N=10), "n8day": dict(RD_ARR=1),
          "kolo": dict(C=0.0), "kovat": dict(E=0.0), "h07": dict(HD=0.7), "a07": dict(A=0.7, BB=0.8),
-         "rc32": dict(RC_N=32, BB=1.0), "h2thap": dict(H2=1.4), "n11": dict(RD_N=11)}
+         "rc32": dict(RC_N=32, BB=1.0), "h2thap": dict(H2=1.4), "n11": dict(RD_N=11), "n4": dict(RD_N=4),
+         "n5": dict(RD_N=5), "n9": dict(RD_N=9), "n12": dict(RD_N=12)}
 base, _ = model.read_excel(os.path.join(ROOT, "samples", "D122-42_MB4-10x12-2.5.xlsm"))
 geos = {}
 for nm, ov in CASES.items():

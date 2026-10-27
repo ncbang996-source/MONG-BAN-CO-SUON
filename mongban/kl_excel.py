@@ -273,8 +273,9 @@ def export(p: dict, g: Geo, path: str):
                "Mỗi ô: ROUNDUP((bề rộng ô − 2cv)/@ chống) ; cộng ô lỗ", "hàng")
     chh = line("", "Thanh chống rơi vào lỗ (bỏ)", "chH",
                f"=IF({has_hole},{CELLS('TS_c-2*TS_cv', 'TS_sch1/1000')}^2,0)", "(số ô trong lỗ)²", "thanh")
-    nf = line("", "Thép chủ dầm dài suốt (1 mặt)", "nf", "=MIN(TS_nd,IF(MOD(TS_nd,4)=0,TS_nd/2,INT(TS_nd/2)+1))",
-              "n chia hết 4: n/2 ; còn lại: INT(n/2)+1", "thanh")
+    nf = line("", "Thép chủ dầm dài suốt (1 mặt)", "nf",
+              "=IF(TS_nd<5,TS_nd,MIN(TS_nd,IF(MOD(TS_nd,4)=0,TS_nd/2,INT(TS_nd/2)+1)))",
+              "n < 5: không cắt (= n) ; n chia hết 4: n/2 ; còn lại: INT(n/2)+1", "thanh")
     ncut = line("", "Thép chủ dầm ngắt (1 mặt)", "nc", f"=TS_nd-{nf}", "n − nf", "thanh")
     cuty = line("", "Đoạn cắt mỗi đầu thanh ngắt - dầm theo Y", "cutY", f"=ROUNDUP({d2}/0.2-0.000001,0)*0.1",
                 "½·D2 làm tròn lên 100 mm (tính từ mép móng)", "m")

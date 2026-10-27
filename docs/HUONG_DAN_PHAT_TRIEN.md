@@ -178,7 +178,10 @@ Nguyên tắc:
   - Khoảng hở ngang ≥ 40 mm, không đủ thì thêm hàng. Hàng dưới tối thiểu 2 thanh, đặt 2 bên.
   - Hàng dưới ≤ 2 thanh thì xếp đầy hàng ngoài và không cần đai phụ giữ lớp 2.
   - Hàng dưới > 2 thanh thì người dùng chọn "các hàng đều nhau" hoặc "đầy hàng ngoài".
-  - Số thanh dài suốt: n/2 nếu n chia hết 4, ngược lại INT(n/2) + 1. Còn lại là thanh ngắt.
+  - Dưới 5 thanh: không cắt. Từ 5 thanh: số thanh dài suốt n/2 nếu n chia hết 4, ngược lại INT(n/2) + 1. Còn lại
+    là thanh ngắt.
+  - Hàng có 1 phần thanh ngắt: thanh góc dài suốt, thanh ngắt xen kẽ ở cột trong (so le), ví dụ 5 thanh thì cắt
+    cột 2 và 4.
   - Thanh ngắt cắt mỗi đầu ½ khoảng mép dầm → mép móng, làm tròn lên 100, tính từ mép móng.
   - Từ 10 thanh trở lên thì cắt so le: thanh góc dài suốt, thanh ngắt ở các cột trong xen kẽ, giống nhau ở mọi
     hàng.

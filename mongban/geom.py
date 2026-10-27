@@ -108,6 +108,26 @@ def tie_plan_mg(m, gstep):
 
 
 
+def _cut_cols(us, k):
+    """Chọn k cột thanh ngắt trong 1 hàng (không lấy thanh góc): xen kẽ cột 2, 4, ... (so le), gần tim dầm trước;
+    số lẻ thanh ngắt và hàng lẻ thanh thì lấy thêm cột giữa."""
+    cnt = len(us)
+    key = lambda j: (round(abs(us[j]), 6), us[j])
+    a = sorted((j for j in range(1, cnt - 1) if j % 2 == 1), key=key)
+    b = sorted((j for j in range(1, cnt - 1) if j % 2 == 0), key=key)
+    cut = []
+    if k % 2 == 1 and cnt % 2 == 1:
+        c = cnt // 2
+        cut.append(c)
+        a = [j for j in a if j != c]
+        b = [j for j in b if j != c]
+    rest = k - len(cut)
+    cut += a[:rest]
+    rest = k - len(cut)
+    cut += b[:max(0, rest)]
+    return cut[:k]
+
+
 class Geo:
     """Toàn bộ kích thước bố trí của 1 móng."""
 
@@ -207,7 +227,7 @@ class Geo:
         a, cov, d, dt = self.a, self.cov, self.dm, self.dt
         n = int(round(self.g("RD_N")))
         self.n_full = n // 2 if n % 4 == 0 else n // 2 + 1
-        self.n_full = min(n, self.n_full)
+        self.n_full = n if n < 5 else min(n, self.n_full)      # dưới 5 thanh: không cắt
         self.n_cut = n - self.n_full
         gap = max(0.025, d)                      # khoảng hở giữa các hàng (theo phương đứng)
         hgap = max(model.GAP_MIN, d)             # khoảng hở ngang tối thiểu 40 mm -> không đủ thì thêm hàng
@@ -259,7 +279,12 @@ class Geo:
             if left >= cnt:
                 fl = [True] * cnt
                 left -= cnt
-            else:   # thanh dài suốt đặt ở 2 đầu hàng, đối xứng
+            elif left >= 2:      # hàng có 1 phần thanh ngắt: thanh góc dài suốt, thanh ngắt so le ở cột trong
+                fl = [True] * cnt
+                for j in _cut_cols(uss[i], cnt - left):
+                    fl[j] = False
+                left = 0
+            else:                # chỉ còn 0-1 thanh dài suốt: đặt ở đầu hàng
                 order = sorted(range(cnt), key=lambda j: -abs(uss[i][j]))
                 for j in order[:left]:
                     fl[j] = True
