@@ -14,6 +14,7 @@ import traceback
 from tkinter import filedialog, messagebox, ttk
 
 from mongban import _meta, cad, export, frame, kl_excel, model
+from mongban.ui3d import View3D
 
 APP_NAME = "VE_MONGBANCOSUON"
 APP_VER = "1.0.0"
@@ -196,6 +197,12 @@ class App(tk.Tk):
         st.configure("Vertical.TScrollbar", background=C["bar"], troughcolor=C["bg"], bordercolor=C["bg"],
                      arrowcolor=C["blue"])
         st.configure("TPanedwindow", background=C["bg"])
+        st.configure("TNotebook", background=C["card"], bordercolor=C["line"], tabmargins=(6, 6, 6, 0))
+        st.configure("TNotebook.Tab", background=C["bar"], foreground=C["muted"], padding=(10, 4), font=fb,
+                     bordercolor=C["line"])
+        st.map("TNotebook.Tab", background=[("selected", "#FFFFFF")], foreground=[("selected", C["blue"])])
+        st.configure("TRadiobutton", background=C["card"])
+        st.configure("TCheckbutton", background=C["card"])
         return f, fb
 
     def _build_ui(self):
@@ -287,8 +294,15 @@ class App(tk.Tk):
             self.bind_class("TCombobox", ev, lambda e, dl=dl: (self._wheel_any(e, dl), "break")[1])
         self._form(body)
 
-        # xem trước
-        top = ttk.Frame(right, padding=(8, 6))
+        # xem trước: tab bản in + tab mô hình 3D
+        self.nb = ttk.Notebook(right)
+        self.nb.pack(fill="both", expand=True)
+        tab1 = ttk.Frame(self.nb)
+        self.v3d = View3D(self.nb, APP_NAME, C)
+        self.nb.add(tab1, text="  Bản in (PDF)  ")
+        self.nb.add(self.v3d, text="  Mô hình 3D  ")
+        self.nb.bind("<<NotebookTabChanged>>", lambda e: self.v3d.refresh() if self.nb.index("current") == 1 else None)
+        top = ttk.Frame(tab1, padding=(8, 6))
         top.pack(side="top", fill="x")
         ttk.Label(top, text="XEM TRƯỚC BẢN IN", style="Info2.TLabel").pack(side="left", padx=(0, 12))
         self.v_page = tk.StringVar(value="Tờ 1")
@@ -300,7 +314,7 @@ class App(tk.Tk):
         ttk.Button(top, text="−", width=3, command=lambda: self.zoom_by(0.8), style="Small.TButton").pack(side="left", padx=(2, 0))
         self.l_state = ttk.Label(top, text="", style="Sub.TLabel")
         self.l_state.pack(side="left", padx=10)
-        self.pv = tk.Canvas(right, background=C["stage"], highlightthickness=0)
+        self.pv = tk.Canvas(tab1, background=C["stage"], highlightthickness=0)
         self.pv.pack(fill="both", expand=True)
         self.pv.bind("<Configure>", lambda e: self._redraw())
         self.pv.bind("<ButtonPress-1>", self._press)
@@ -341,6 +355,8 @@ class App(tk.Tk):
             return
         if self._inside(w, self.pv):
             self.zoom_by(1.15 if delta > 0 else 1 / 1.15, e)
+        elif self._inside(w, self.v3d.cv):
+            self.v3d.wheel(e, delta)
         elif self._inside(w, self._scroll_left.master):
             step = -1 if delta > 0 else 1
             n = max(1, abs(int(delta / 120)))
@@ -561,6 +577,7 @@ class App(tk.Tk):
         p = self._update_info()
         if p is None:
             return
+        self.v3d.set_params(p)
         self.busy = True
         self.l_state.config(text="Đang dựng bản vẽ...")
         self.config(cursor="watch")

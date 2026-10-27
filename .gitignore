@@ -5,3 +5,4 @@ dist/
 *.pdf
 /out*.dxf
 *.layout.json
+shots/

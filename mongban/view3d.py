@@ -13,6 +13,8 @@ COL = {
     "slab_y": (200, 30, 40), "slab_x": (90, 40, 200), "slab_h": (230, 120, 0),
     "rib": (150, 0, 20), "dai": (40, 80, 230), "gia": (120, 60, 160),
     "pier": (220, 90, 20), "hoop": (30, 110, 210), "bg": (255, 255, 255),
+    "tie": (0, 150, 200), "chair": (90, 90, 90), "haunch": (0, 140, 90), "mesh": (60, 60, 200),
+    "bolt": (70, 70, 70), "ladder": (110, 110, 110),
 }
 LAYERS = ("bt", "slab", "rib", "dai", "pier")
 
@@ -154,52 +156,155 @@ class Scene:
                         p0 = (t + u, -ln, z) if along_y else (-ln, t + u, z)
                         p1 = (t + u, ln, z) if along_y else (ln, t + u, z)
                         self.L("rib", COL["gia"], g.dg, [p0, p1])
-                # đai
+                # đai dầm, đai phụ ngang (mức thép giá + giữ lớp 2), đai phụ đứng
                 uo = a / 2 - cov - dt / 2
                 zb = g.rows_b[0][0] - dm / 2 - dt / 2
                 zt = g.rows_t[0][0] + dm / 2 + dt / 2
+                P = (lambda st, u, z: (t + u, st, z)) if along_y else (lambda st, u, z: (st, t + u, z))
                 for st in g.stirrups(along_y):
-                    q = [(-uo, zb), (uo, zb), (uo, zt), (-uo, zt)]
-                    pts = [(t + u, st, z) if along_y else (st, t + u, z) for u, z in q]
-                    self.L("dai", COL["dai"], dt, pts, True)
-        # cổ móng
+                    self.L("dai", COL["dai"], dt, [P(st, u, z) for u, z in
+                                                   ((-uo, zb), (uo, zb), (uo, zt), (-uo, zt))], True)
+                dp = g.g("RDP_D") / 1000.0
+                for st in g.ties(along_y):
+                    st += 0.03                           # lệch khỏi đai chính cho dễ nhìn
+                    for z in list(g.z_gia):
+                        self.L("dai", COL["tie"], dp, [P(st, -uo, z), P(st, uo, z)])
+                    for z in g.z_tie2():
+                        u2 = g.u_tie2()
+                        self.L("dai", COL["tie"], dp, [P(st, -u2, z), P(st, u2, z)])
+                    if g.has_vtie():
+                        self.L("dai", COL["tie"], dp, [P(st, 0.0, zb), P(st, 0.0, zt)])
+        # thanh chống (6): thân đứng giữa 2 lớp thép bản, 2 chân ngang
+        dch = g.g("RCH_D") / 1000.0
+        from .geom import CH_LEG, ANCHOR, TL_LEG, TL_W, TL_OUT
+        z0c = g.covb + 2 * ds
+        z1c = z0c + g.chair_body()
+        for x, y in g.chairs:
+            self.L("slab", COL["chair"], dch, [(x + CH_LEG, y, z0c), (x, y, z0c), (x, y, z1c), (x + CH_LEG, y, z1c)])
+        # vát nách (7, 8, 9) tại 4 chỗ giao dầm
+        if g.hasHaunch:
+            r2 = 1 / math.sqrt(2)
+            l7, l8, d7 = g.l7(), g.l8(), (a + e) / 2 - cov
+            z7 = hd - cov
+            z8 = z7 - dt - 0.02
+            zs9 = [z8 - 0.03 - i * 0.2 for i in range(g.n9())]
+            n8 = g.n8()
+            ts = [-l8 / 2 + (i + 1) * l8 / (n8 + 1) for i in range(n8)]
+            for sx in (-1, 1):
+                for sy in (-1, 1):
+                    X, Y = sx * dx, sy * dy
+                    for qx in (-1, 1):
+                        for qy in (-1, 1):
+                            mx, my = X + qx * d7, Y + qy * d7
+                            ux, uy = -qx * r2 * l7 / 2, qy * r2 * l7 / 2
+                            self.L("rib", COL["haunch"], dt, [(mx - ux, my - uy, cov), (mx - ux, my - uy, z7),
+                                                              (mx + ux, my + uy, z7), (mx + ux, my + uy, cov)])
+                    for (nx, ny), (ux, uy) in (((r2, r2), (-r2, r2)), ((r2, -r2), (r2, r2))):
+                        for tt in ts:
+                            mx, my = X + nx * tt, Y + ny * tt
+                            ex, ey = ux * l8 / 2, uy * l8 / 2
+                            self.L("rib", COL["haunch"], dt, [(mx - ex, my - ey, cov), (mx - ex, my - ey, z8),
+                                                              (mx + ex, my + ey, z8), (mx + ex, my + ey, cov)])
+                    h8 = l8 / 2
+                    sq = [(X + r2 * (p_ + q_) * h8, Y + r2 * (p_ - q_) * h8) for p_, q_ in
+                          ((1, 1), (1, -1), (-1, -1), (-1, 1))]
+                    for z in zs9:
+                        self.L("rib", COL["haunch"], dt, [(x_, y_, z) for x_, y_ in sq], True)
+        # cổ móng: thép chủ (neo chân bẻ ra ngoài), đai, lưới đầu trụ, bu lông, thang leo
         dc = g.g("RC_D") / 1000.0
         dh = g.g("RT_D") / 1000.0
-        w = bb / 2 - cov - dh - dc / 2
+        w = bb / 2 - cov - dc / 2
         m = g.m_bars()
         us = [-w + i * 2 * w / (m - 1) for i in range(m)]
         ring = [(u, -w) for u in us] + [(w, u) for u in us[1:]] + \
                [(u, w) for u in reversed(us[:-1])] + [(-w, u) for u in reversed(us[1:-1])]
         z0, z1 = g.covb + 2 * ds, H - cov
+        dl, sl = g.g("RL_D") / 1000.0, g.g("RL_S") / 1000.0
+        nd = max(1, math.ceil(2 * w / sl - 1e-6))
+        db = model_bolt_d(g.p)
         for sx in (-1, 1):
             for sy in (-1, 1):
                 x, y = sx * dx, sy * dy
                 for u, v in ring:
-                    self.L("pier", COL["pier"], dc, [(x + u, y + v, z0), (x + u, y + v, z1)])
+                    if abs(u) >= abs(v) - 1e-9:
+                        ax = (math.copysign(ANCHOR, u), 0.0)
+                    else:
+                        ax = (0.0, math.copysign(ANCHOR, v))
+                    self.L("pier", COL["pier"], dc, [(x + u, y + v, z1), (x + u, y + v, z0),
+                                                     (x + u + ax[0], y + v + ax[1], z0)])
                 wh = w + dc / 2 + dh / 2
                 for z in g.hoop_zs():
                     self.L("pier", COL["hoop"], dh,
                            [(x - wh, y - wh, z), (x + wh, y - wh, z), (x + wh, y + wh, z), (x - wh, y + wh, z)], True)
+                for il in range(int(g.g("RL_N"))):
+                    z = z1 - 0.02 - il * sl
+                    for j in range(nd + 1):
+                        o = -w + j * 2 * w / nd
+                        self.L("pier", COL["mesh"], dl, [(x + o, y - w, z), (x + o, y + w, z)])
+                        self.L("pier", COL["mesh"], dl, [(x - w, y + o, z - dl), (x + w, y + o, z - dl)])
+                ob = 0.47 * bb / 2
+                for bx in (-1, 1):
+                    for by in (-1, 1):
+                        px, py = x + bx * ob, y + by * ob
+                        # phần nhô lên khỏi đỉnh cổ (chiều dài neo không có trong số liệu -> không vẽ phần chôn)
+                        self.L("pier", COL["bolt"], db * 0.8, [(px, py, H), (px, py, H + 0.25)])
+                        hn = 0.9 * db
+                        for zn in (H + 0.06, H + 0.14):
+                            self.L("pier", COL["bolt"], 0.012, [(px - hn, py - hn, zn), (px + hn, py - hn, zn),
+                                                               (px + hn, py + hn, zn), (px - hn, py + hn, zn)], True)
+        nl = g.n_ladder()
+        if nl:
+            dtl = g.g("TL_D") / 1000.0
+            for sx, sy in g.ladder_piers():
+                xf, sg = sx * dx - sx * bb / 2, -sx
+                y = sy * dy
+                for i in range(nl):
+                    z = H - cov - i * g.g("TL_S") / 1000.0
+                    self.L("pier", COL["ladder"], dtl, [(xf - sg * TL_LEG, y - TL_W / 2, z), (xf + sg * TL_OUT, y - TL_W / 2, z),
+                                                        (xf + sg * TL_OUT, y + TL_W / 2, z), (xf - sg * TL_LEG, y + TL_W / 2, z)])
+
+    def bounds(self):
+        pts = np.array([p for f in self.faces for p in f[3]] or [(0, 0, 0)])
+        return pts.min(0), pts.max(0)
+
+
+def model_bolt_d(p):
+    """Đường kính bu lông (m) đọc từ chữ BLN, vd 'BLN-M56' -> 0.056."""
+    import re
+    m_ = re.search(r"M\s*(\d+)", str(p.get("BLN", "")))
+    return (int(m_.group(1)) if m_ else 36) / 1000.0
+
+
+def axes2d(yaw, pitch):
+    """Hướng 2D (phải, lên) của 3 trục X, Y, Z trên màn hình (để vẽ biểu tượng trục)."""
+    R = rot(yaw, pitch)
+    return [(R[0, i], R[1, i]) for i in range(3)]
+
+
+def rot(yaw, pitch):
+    cy_, sy_ = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
+    cp, sp = math.cos(math.radians(pitch)), math.sin(math.radians(pitch))
+    return np.array([[cy_, -sy_, 0.0], [sy_ * sp, cy_ * sp, cp], [-sy_ * cp, -cy_ * cp, sp]])   # hàng: phải, lên, về phía người xem
 
 
 def render(scene: Scene, w=1200, h=800, yaw=-35.0, pitch=28.0, zoom=1.0, layers=LAYERS, ss=2,
-           pan=(0.0, 0.0)) -> Image.Image:
-    """Chiếu trục đo (orthographic), vẽ mặt bê tông trong suốt theo thứ tự xa -> gần rồi đến thép."""
+           pan=(0.0, 0.0), fast=False, center=None) -> Image.Image:
+    """Chiếu song song (trục đo), mặt bê tông trong suốt vẽ xa -> gần, sau đó thép xa -> gần.
+    Tỷ lệ theo mặt cầu bao mô hình nên không nhảy khi xoay. fast: bản nháp khi đang kéo chuột."""
+    if fast:
+        ss = 1
     W, Hh = w * ss, h * ss
-    cy_, sy_ = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
-    cp, sp = math.cos(math.radians(pitch)), math.sin(math.radians(pitch))
-    R = np.array([[cy_, -sy_, 0.0], [sy_ * sp, cy_ * sp, cp], [-sy_ * cp, -cy_ * cp, sp]])   # hàng: phải, lên, sâu
+    R = rot(yaw, pitch)
+    lo, hi = scene.bounds()
+    ctr = (lo + hi) / 2
+    rad = max(1e-3, 0.5 * float(np.linalg.norm(hi - lo)))
+    k = zoom * 1.3 * min(W, Hh) / (2 * rad)
+    c2 = R @ (ctr if center is None else np.asarray(center, float))
+    ox = W / 2 - k * c2[0] + pan[0] * ss
+    oy = Hh / 2 + k * c2[1] + pan[1] * ss
 
     def proj(pts):
-        q = np.asarray(pts, float) @ R.T
-        return q
-
-    allp = np.array([p for f in scene.faces for p in f[3]])
-    q = proj(allp)
-    lo, hi = q.min(0), q.max(0)
-    k = zoom * 0.9 * min(W / (hi[0] - lo[0]), Hh / (hi[1] - lo[1]))
-    ox = W / 2 - k * (lo[0] + hi[0]) / 2 + pan[0] * ss
-    oy = Hh / 2 + k * (lo[1] + hi[1]) / 2 + pan[1] * ss
+        return np.asarray(pts, float) @ R.T
 
     def scr(q):
         return [(ox + k * a, oy - k * b) for a, b in q[:, :2]]
@@ -211,15 +316,19 @@ def render(scene: Scene, w=1200, h=800, yaw=-35.0, pitch=28.0, zoom=1.0, layers=
             qq = proj(f)
             fs.append((qq[:, 2].mean(), col, al, scr(qq)))
         fs.sort(key=lambda t: t[0])
-        ov = Image.new("RGBA", (W, Hh), (0, 0, 0, 0))
+        for _, col, al, pts in fs:          # ghép từng mặt trong khung bao của nó (nhanh hơn ghép cả ảnh)
+            x0 = max(0, int(min(p[0] for p in pts)) - 1)
+            y0 = max(0, int(min(p[1] for p in pts)) - 1)
+            x1 = min(W, int(max(p[0] for p in pts)) + 2)
+            y1 = min(Hh, int(max(p[1] for p in pts)) + 2)
+            if x1 <= x0 or y1 <= y0:
+                continue
+            tile = Image.new("RGBA", (x1 - x0, y1 - y0), (0, 0, 0, 0))
+            ImageDraw.Draw(tile).polygon([(a - x0, b - y0) for a, b in pts], fill=col + (int(255 * al),))
+            img.alpha_composite(tile, (x0, y0))
+        dr = ImageDraw.Draw(img, "RGBA")
         for _, col, al, pts in fs:
-            layer = Image.new("RGBA", (W, Hh), (0, 0, 0, 0))
-            ImageDraw.Draw(layer).polygon(pts, fill=col + (int(255 * al),))
-            ov = Image.alpha_composite(ov, layer)
-        img = Image.alpha_composite(img, ov)
-        dr = ImageDraw.Draw(img)
-        for _, col, al, pts in fs:
-            dr.line(pts + [pts[0]], fill=COL["edge"] + (110,), width=max(1, ss))
+            dr.line(pts + [pts[0]], fill=COL["edge"] + (120,), width=max(1, ss))
     dr = ImageDraw.Draw(img)
     ls = [t for t in scene.lines if t[0] in layers]
     if ls:
@@ -231,4 +340,5 @@ def render(scene: Scene, w=1200, h=800, yaw=-35.0, pitch=28.0, zoom=1.0, layers=
             col, d = ls[i][1], ls[i][2]
             wd = max(1, int(round(k * d * 1.1)))
             dr.line([s0[i], s1[i]], fill=col + (255,), width=wd)
-    return img.convert("RGB").resize((w, h), Image.LANCZOS)
+    img = img.convert("RGB")
+    return img if ss == 1 else img.resize((w, h), Image.LANCZOS)
