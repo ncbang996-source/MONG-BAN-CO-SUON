@@ -276,7 +276,7 @@ class App(tk.Tk):
         pw.add(right, weight=1)
 
         # khung trái cuộn được
-        cv = tk.Canvas(left, width=440, highlightthickness=0, background=C["card"])
+        cv = tk.Canvas(left, width=590, highlightthickness=0, background=C["card"])
         sb = ttk.Scrollbar(left, orient="vertical", command=cv.yview)
         body = ttk.Frame(cv, padding=(6, 4, 10, 10))
         body.bind("<Configure>", lambda e: cv.configure(scrollregion=cv.bbox("all")))
@@ -417,13 +417,19 @@ class App(tk.Tk):
             ttk.Label(body, text=lbl).grid(row=r, column=0, sticky="w", padx=(10, 4), pady=1)
             vd = self.vars[kd] if kd in self.vars else self._var(kd)
             ttk.Entry(body, textvariable=vd, width=5).grid(row=r, column=1, sticky="w")
-            ttk.Entry(body, textvariable=self._var(ks), width=6).grid(row=r, column=2, sticky="w")
+            if ks == "RD_N":             # số thanh + cách xếp thép chủ dầm nhiều hàng trên cùng dòng
+                fr = ttk.Frame(body)
+                fr.grid(row=r, column=2, columnspan=2, sticky="w")
+                ttk.Entry(fr, textvariable=self._var(ks), width=6).pack(side="left")
+                ttk.Combobox(fr, textvariable=self._var("RD_ARR"), values=model.ARR_NAMES, width=15,
+                             state="readonly").pack(side="left", padx=(4, 0))
+            else:
+                ttk.Entry(body, textvariable=self._var(ks), width=6).grid(row=r, column=2, sticky="w")
             r += 1
         ttk.Label(body, text="Thép chủ cổ móng: số thanh / Ø").grid(row=r, column=0, sticky="w", padx=(10, 4), pady=1)
         ttk.Entry(body, textvariable=self._var("RC_N"), width=5).grid(row=r, column=1, sticky="w")
         ttk.Entry(body, textvariable=self._var("RC_D"), width=6).grid(row=r, column=2, sticky="w")
         r += 1
-        row("Thép chủ dầm nhiều hàng", "RD_ARR", 22, values=model.ARR_NAMES)
         row("Số lớp lưới đầu trụ", "RL_N", 5)
         row("Lớp BT bảo vệ đáy móng (mm)", "COVER_B", 6)
         row("Lớp BT bảo vệ còn lại (mm)", "COVER", 6)
@@ -433,10 +439,10 @@ class App(tk.Tk):
                      state="readonly").grid(row=r, column=1, sticky="w")
         ttk.Button(body, text="Tự chọn", command=self.auto_scale, style="Small.TButton").grid(row=r, column=2, sticky="w")
         r += 1
-        self.l_info = ttk.Label(body, text="", style="Info2.TLabel", wraplength=410, justify="left")
+        self.l_info = ttk.Label(body, text="", style="Info2.TLabel", wraplength=520, justify="left")
         self.l_info.grid(row=r, column=0, columnspan=4, sticky="w", padx=6, pady=(10, 2))
         r += 1
-        self.l_err = ttk.Label(body, text="", style="Err.TLabel", wraplength=410, justify="left")
+        self.l_err = ttk.Label(body, text="", style="Err.TLabel", wraplength=520, justify="left")
         self.l_err.grid(row=r, column=0, columnspan=4, sticky="w", padx=6)
 
     # ------------------------------------------------------------ dữ liệu

@@ -61,20 +61,30 @@ def rib_section(c: Ctx, g: Geo, co: Callouts, ox, oy, along_y: bool, name: str):
     # thanh chống đặt kẹp sát 1 thanh thép bản (chấm tròn)
     gap = (p["RS_D"] + p["RCH_D"]) / 2000.0
     moved = []
+    leg = 0.1                    # chân thanh chống (CH_LEG)
+
+    def clear(u0, u1):           # đoạn [u0, u1] nằm trong hình cắt và không chạm dầm
+        lo, hi = min(u0, u1), max(u0, u1)
+        return ul < lo and hi < ur and (hi < -a / 2 - 0.02 or lo > a / 2 + 0.02)
     for u in chs:
+        xe = leg if u < 0 else -leg                       # chân C hướng về phía dầm
         if dots:
             dd = min(dots, key=lambda q: abs(q - u))
-            sd = 1.0 if u >= dd else -1.0
-            nu = dd + sd * gap
-            if not (ul < nu < ur) or (-a / 2 - 0.02 < nu < a / 2 + 0.02):
-                nu = dd - sd * gap
-            u = nu
-        if all(abs(u - q) > 1e-6 for q in moved):
-            moved.append(u)
-    chs = moved
-    for u in chs:
+            if feet_in:              # chấm thép bản nằm giữa nhịp chân C -> chân chống đỡ đúng thanh
+                if not clear(dd - xe / 2, dd + xe / 2):
+                    xe = -xe
+                u = dd - xe / 2
+            else:                    # thanh chống vuông góc mặt cắt: kẹp sát 1 thanh thép bản
+                sd = 1.0 if u >= dd else -1.0
+                nu = dd + sd * gap
+                if not (ul < nu < ur) or (-a / 2 - 0.02 < nu < a / 2 + 0.02):
+                    nu = dd - sd * gap
+                u = nu
+        if all(abs(u - q[0]) > 1e-6 for q in moved):
+            moved.append((u, xe))
+    chs = [u for u, _ in moved]
+    for u, xe in moved:
         if feet_in:
-            xe = 0.1 if u < 0 else -0.1
             v.pl("DAI", False, [(u + xe, zi_b), (u, zi_b), (u, zi_t), (u + xe, zi_t)])
         else:
             v.ln("DAI", u, zi_b, u, zi_t)
