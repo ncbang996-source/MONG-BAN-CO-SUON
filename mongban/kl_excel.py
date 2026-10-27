@@ -421,7 +421,8 @@ def export(p: dict, g: Geo, path: str):
     for pos in sorted(F):
         r += 1
         fd, fl, fq, tl, tq = F[pos]
-        _cell(wk, r, 1, g.sq(pos) if pos in g.seq else "—", align=Alignment(horizontal="center"))
+        # số hiệu chạy theo số liệu: chỉ đánh số các thanh có số lượng > 0 (giống bảng thống kê trên bản vẽ)
+        _cell(wk, r, 1, f'=IF(E{r}>0,COUNTIF(E${rs0}:E{r},">0"),"—")', align=Alignment(horizontal="center"))
         _cell(wk, r, 2, desc.get(pos, ""))
         _cell(wk, r, 3, f"={fd}", "0")
         _cell(wk, r, 4, f"=ROUND(1000*({fl}),0)", "0")
