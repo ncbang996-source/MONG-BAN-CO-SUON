@@ -331,12 +331,16 @@ def plan_outline(c: Ctx, g: Geo, v: V, bolts=True, lot=True):
     v.ln("TRUC", 0.0, -B - 0.3, 0.0, B + 0.3)
 
 
-def draw_route(c: Ctx, g: Geo, cx, cy, lh, lx):
+def draw_route(c: Ctx, g: Geo, cx, cy, lh, lx, k=None):
     """Hướng tuyến đi qua tim móng (quy ước app cũ): đỡ - 2 chiều theo Y; néo góc - 2 tia lệch 10°,
     phân giác hướng sang trái; néo dừng - 1 chiều."""
     ht = int(g.p["HT"])
     wr = txtw(T_ROUTE, 2.0)
     a = max(4.6 + wr / 2, min(0.5 * lh, lh - 2.4 - wr / 2))
+    if k:                                  # ưu tiên khoảng trống giữa mép dầm và mép bản
+        z0 = k * (g.dy + g.a / 2) + 1.0
+        if lh - 1.0 - z0 >= wr + 1.0:
+            a = 0.5 * (z0 + lh - 1.0)
     if ht == 1:
         dlt = math.radians(10.0)
         sn, cs = math.sin(dlt), math.cos(dlt)
@@ -421,7 +425,7 @@ def draw_plan(c: Ctx, g: Geo, detail: bool):
         sg = -1.0 if int(g.p["HT"]) == 1 else 1.0         # néo góc: chữ phân giác ở trên trục -> ghi tim móng ở dưới
         c.pl("CHU", False, [(cx, cy), (xh - 3.0, cy + sg * 4.7), (xh - 17.4, cy + sg * 4.7)], fixed=(0,))
         c.tx("CHU", xh - 17.7, cy + sg * 4.7 + 0.9, 2.0, T_AXIS)
-    draw_route(c, g, cx, cy, k * g.Bh - 1.0, k * g.Lh - 1.0)
+    draw_route(c, g, cx, cy, k * g.Bh - 1.0, k * g.Lh - 1.0, k)
     sym(c, cx, v.y(g.Bh + model.ML) + 3.0)
     sym_r(c, v.x(-g.Lh - model.ML) - 3.0, cy, 90.0)
     # ký hiệu mặt cắt A-A
