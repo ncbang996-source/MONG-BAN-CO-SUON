@@ -496,8 +496,11 @@ def plan_bars(c: Ctx, g: Geo, v: V):
         used.append(by)
         if abs(by - v.y(y)) < 3.0:           # điểm chạm cách xa chấm thanh đại diện
             by = v.y(y) + 3.0 if v.y(y) + 3.0 <= hi_ - 0.3 else v.y(y) - 3.0
-        co([(v.x(xm), by)], xr, by, 1, pos, phi(d, s), f"SL:{2 * len(yy)}%%C{int(d)} - 2 LỚP", tick=False,
-           mode=True)
+        yt = by
+        if pos == 4 and by > v.y(0.0) - 10.0:     # chữ tag đè ký hiệu mặt cắt A (trên trục ngang) -> hạ xuống dưới
+            yt = v.y(0.0) - 10.0
+        co([(v.x(xm), by)], xr, yt, 1, pos, phi(d, s), f"SL:{2 * len(yy)}%%C{int(d)} - 2 LỚP", tick=False,
+           mode=yt == by)                     # tag bị hạ: leader xiên, không chạy trùng đường rải
     # --- thanh theo Y (thép 1, 2) ở nửa dưới: đường rải ngang gần mép dưới; leader chạm đường rải
     zones = []
     for z0, z1, kd in g.zones(L, g.dx):
