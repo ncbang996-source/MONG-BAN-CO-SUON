@@ -254,11 +254,12 @@ def dim_section(c: Ctx, g: Geo):
     c.dimV("DIM", (xr, g.ybase), (xr, g.ybase + k * g.hd), xr + 7.0)
     # ngang dưới mặt cắt
     hl = k * (L + model.ML)
-    c.dimH("DIM", (cx - k * L, g.ybase + 1.2), (cx + k * L, g.ybase + 1.2), g.yd)
-    c.dimH("DIM", (cx + k * L, g.ybase - 4.2), (cx + hl, g.ylt), g.yd, (cx + hl - 0.5, g.yd - 4.5))
-    c.dimH("DIM", (cx - k * L, g.ybase), (cx - hl, g.ybase), g.yd, (cx - hl + 0.5, g.yd - 4.5))
-    c.dimH("DIM", (cx - hl, g.ybase), (cx - k * g.pitB, g.ylb), g.yd, (cx - k * g.pitB - 3.2, g.yd + 1.7))
-    c.dimH("DIM", (cx + hl, g.ybase), (cx + k * g.pitB, g.ylb), g.yd, (cx + k * g.pitB + 3.2, g.yd + 1.7))
+    yb = g.ylb          # đường gióng đặt từ mép dưới lớp đệm cát (không xuyên qua lớp cát)
+    c.dimH("DIM", (cx - k * L, yb), (cx + k * L, yb), g.yd)
+    c.dimH("DIM", (cx + k * L, yb), (cx + hl, yb), g.yd, (cx + hl - 0.5, g.yd - 4.5))
+    c.dimH("DIM", (cx - k * L, yb), (cx - hl, yb), g.yd, (cx - hl + 0.5, g.yd - 4.5))
+    c.dimH("DIM", (cx - hl, yb), (cx - k * g.pitB, yb), g.yd, (cx - k * g.pitB - 3.2, g.yd + 1.7))
+    c.dimH("DIM", (cx + hl, yb), (cx + k * g.pitB, yb), g.yd, (cx + k * g.pitB + 3.2, g.yd + 1.7))
     if g.hasCushion:
         # đoạn vải địa gấp vào dưới móng 500: đường gióng đặt từ mép dưới lớp đệm cát
         for x1, x2 in ((cx - k * L, cx - k * L + 0.5 * k), (cx + k * L - 0.5 * k, cx + k * L)):
