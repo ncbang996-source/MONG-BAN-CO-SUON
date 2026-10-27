@@ -12,11 +12,8 @@ OUT = os.path.join(ROOT, "shots")
 os.makedirs(OUT, exist_ok=True)
 LOG = open(os.path.join(OUT, "log.txt"), "w", encoding="utf-8")
 sys.stderr = LOG                                      # log lỗi tải cùng ảnh (artifact)
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from PIL import ImageGrab  # noqa: E402
-
-import app as A  # noqa: E402
-from mongban import cad  # noqa: E402
 
 
 
@@ -26,6 +23,10 @@ def log(*a):
 
 
 def main():
+    from PIL import ImageGrab
+
+    import app as A
+    from mongban import cad
     cad.init_fonts()
     w = A.App()
     w.geometry("1600x960+0+0")
@@ -72,6 +73,19 @@ def main():
     shot("6_3d_tat_be_tong_thep_ban.png")
     w.destroy()
     log("OK - giao dien 3D")
+    if os.environ.get("SHOTS_ANNOT"):       # tạm: gửi ảnh nhỏ qua annotation để xem từ xa
+        import base64
+        import io
+        from PIL import Image
+        for nm in ("2_3d_toan_mong.png", "4_3d_cat_1_4.png", "5_3d_phong_to.png"):
+            im = Image.open(os.path.join(OUT, nm)).convert("RGB")
+            im.thumbnail((1100, 700))
+            b = io.BytesIO()
+            im.save(b, "JPEG", quality=55)
+            t = base64.b64encode(b.getvalue()).decode()
+            n = (len(t) + 59999) // 60000
+            for i in range(n):
+                print(f"::notice title=IMG {nm} {i + 1}/{n}::" + t[i * 60000:(i + 1) * 60000])
 
 
 if __name__ == "__main__":
