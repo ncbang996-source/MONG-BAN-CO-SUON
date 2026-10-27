@@ -11,7 +11,8 @@ App Windows chạy offline, vẽ nhanh bản vẽ **móng bản có dầm (móng
   - TKBVTC có 2 tờ.
     - Tờ 1/2: mặt cắt A-A, mặt bằng móng có thép bản và thép dầm, bảng thống kê cốt thép.
     - Tờ 2/2: mặt cắt dầm 1-1 và 2-2 (1:25), vát nách 3-3 và 4-4 (1:50), cổ móng 5-5 kèm thang leo, lưới thép đầu trụ, 1/2 mặt cắt B-B dọc tim dầm (thép dầm, neo thép cổ móng), bảng tổng kê.
-- **Xuất file:** PDF A3, AutoCAD DXF, Excel khối lượng (`_KL.xlsx`, gồm các sheet TONG KE, THONG SO, KHOI LUONG, có công thức). Tên file xuất trùng tên file Excel.
+- **Xuất file:** PDF A3, AutoCAD DXF, Excel khối lượng (`_KL.xlsx`, gồm các sheet TONG KE, THONG SO, KHOI LUONG). Tên file xuất trùng tên file Excel. Trong Excel, chiều dài và số lượng từng thanh thép đều là công thức theo thông số, có diễn giải: sửa ô thông số thì khối lượng tự tính lại.
+- **Mô hình 3D:** tab riêng trong khung xem, bê tông trong suốt, bật/tắt từng nhóm thép, cắt 1/4 móng.
 - **Sắp xếp (kéo thả):** giống app cũ. Vị trí lưu vào `<tên Excel>.layout.json`.
 
 ## Ô đọc từ sheet TONG HOP
@@ -35,7 +36,8 @@ App Windows chạy offline, vẽ nhanh bản vẽ **móng bản có dầm (móng
 - **Đền bù:** rộng B + 1, dài L + 1.
 - **Thép:** số thanh và chiều dài theo quy tắc sheet `KL thep mong`, khối lượng tính từ đúng các thanh vẽ ra.
   - Thép bản theo phương cạnh dài nằm lớp ngoài cùng. Thanh chống đặt theo phương cạnh ngắn.
-  - Thép chủ dầm: số thanh dài suốt mỗi mặt là J/2 (làm tròn lên số chẵn), số còn lại là thanh ngắt. Thanh ngắt ngắn hơn 2 lần ROUNDDOWN(min(ô ngoài)/2, 100).
+  - Thép chủ dầm: số thanh dài suốt mỗi mặt là n/2 (n chia hết 4) hoặc INT(n/2) + 1, số còn lại là thanh ngắt. Thanh ngắt cắt mỗi đầu ½ khoảng mép dầm → mép móng, làm tròn lên 100, tính từ mép móng. Từ 10 thanh trở lên thì cắt so le.
+  - Khoảng hở ngang thép chủ ≥ 40 mm, không đủ thì thêm hàng (hàng dưới tối thiểu 2 thanh). Hàng dưới > 2 thanh thì chọn "các hàng đều nhau" hoặc "đầy hàng ngoài".
   - Đoạn neo thép chủ cổ móng cố định 500. Thang leo đặt ở 2 trụ chéo nhau khi H2 > 1.5 m.
 
 ## Nét in (theo layer)
@@ -55,3 +57,8 @@ Vào tab **Actions** của repo, mở lần build mới nhất và tải mục *
 pip install -r requirements.txt
 python app.py
 ```
+
+## Phát triển app cho loại móng khác
+Xem [docs/HUONG_DAN_PHAT_TRIEN.md](docs/HUONG_DAN_PHAT_TRIEN.md): kiến trúc, module dùng lại / viết mới, quy ước vẽ, quy trình làm việc, quy tắc kỹ thuật đã chốt. Công cụ hỗ trợ:
+- `python tools/render_preview.py [file.xlsx] [KEY=VAL ...] --out thư_mục`: render ảnh xem trước.
+- `python tools/check_kl_excel.py`: đối chiếu công thức Excel khối lượng với chương trình (cần LibreOffice).
