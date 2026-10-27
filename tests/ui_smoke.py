@@ -23,6 +23,7 @@ def log(*a):
 
 
 def main():
+    """Chạy các bước trong mainloop (luồng dựng bản vẽ cần mainloop để gọi after())."""
     from PIL import ImageGrab
 
     import app as A
@@ -30,48 +31,68 @@ def main():
     cad.init_fonts()
     w = A.App()
     w.geometry("1600x960+0+0")
-    w.update()
-
-    def pump(sec):
-        t = time.time()
-        while time.time() - t < sec:
-            w.update()
-            time.sleep(0.02)
+    err = []
 
     def shot(name):
-        pump(0.5)
+        w.update()
         x, y = w.winfo_rootx(), w.winfo_rooty()
         ImageGrab.grab(bbox=(x, y, x + w.winfo_width(), y + w.winfo_height())).save(os.path.join(OUT, name))
 
-    w.read_excel(os.path.join(ROOT, "samples", "D122-42_MB4-10x12-2.5.xlsm"))
-    t0 = time.time()
-    while (w.busy or not w.pages) and time.time() - t0 < 120:
-        pump(0.2)
-    assert w.pages, "không dựng được bản vẽ"
-    shot("1_ban_in.png")
-    w.nb.select(1)
-    pump(1.0)
-    v = w.v3d
-    assert v.p is not None and not v.stale, "tab 3D chưa dựng"
-    shot("2_3d_toan_mong.png")
-    cv = v.cv
-    cv.event_generate("<ButtonPress-1>", x=400, y=300)
-    for i in range(10):
-        cv.event_generate("<B1-Motion>", x=400 + 12 * i, y=300 + 3 * i)
-        w.update()
-    cv.event_generate("<ButtonRelease-1>", x=508, y=327)
-    shot("3_3d_xoay.png")
-    v.v_q.set(True)
-    v._scope()
-    shot("4_3d_cat_1_4.png")
-    for _ in range(6):
-        v.zoom_at(1.25, cv.winfo_width() * 0.45, cv.winfo_height() * 0.45)
-    shot("5_3d_phong_to.png")
-    for key in ("bt", "slab"):
-        v.v_lay[key].set(False)
-    v.refresh()
-    shot("6_3d_tat_be_tong_thep_ban.png")
-    w.destroy()
+    def steps():
+        w.read_excel(os.path.join(ROOT, "samples", "D122-42_MB4-10x12-2.5.xlsm"))
+        t0 = time.time()
+        while (w.busy or not w.pages) and time.time() - t0 < 120:
+            yield 0.3
+        assert w.pages, "khong dung duoc ban ve"
+        yield 0.5
+        shot("1_ban_in.png")
+        w.nb.select(1)
+        yield 1.0
+        v = w.v3d
+        assert v.p is not None and not v.stale, "tab 3D chua dung"
+        shot("2_3d_toan_mong.png")
+        cv = v.cv
+        cv.event_generate("<ButtonPress-1>", x=400, y=300)
+        for i in range(10):
+            cv.event_generate("<B1-Motion>", x=400 + 12 * i, y=300 + 3 * i)
+            yield 0.05
+        cv.event_generate("<ButtonRelease-1>", x=508, y=327)
+        yield 0.5
+        shot("3_3d_xoay.png")
+        v.v_q.set(True)
+        v._scope()
+        yield 0.5
+        shot("4_3d_cat_1_4.png")
+        for _ in range(6):
+            v.zoom_at(1.25, cv.winfo_width() * 0.45, cv.winfo_height() * 0.45)
+        yield 0.5
+        shot("5_3d_phong_to.png")
+        for key in ("bt", "slab"):
+            v.v_lay[key].set(False)
+        v.refresh()
+        yield 0.5
+        shot("6_3d_tat_be_tong_thep_ban.png")
+
+    it = steps()
+
+    def tick():
+        try:
+            dt = next(it)
+        except StopIteration:
+            w.destroy()
+            return
+        except BaseException:
+            import traceback
+            err.append(traceback.format_exc())
+            w.destroy()
+            return
+        w.after(int(dt * 1000), tick)
+
+    w.after(300, tick)
+    w.after(300000, w.destroy)          # chốt an toàn
+    w.mainloop()
+    if err:
+        raise RuntimeError(err[0])
     log("OK - giao dien 3D")
     if os.environ.get("SHOTS_ANNOT"):       # tạm: gửi ảnh nhỏ qua annotation để xem từ xa
         import base64
