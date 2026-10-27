@@ -62,6 +62,52 @@ def stations(x0, x1, s):
     return [x0 + i * w / (n - 1) for i in range(n)]
 
 
+def tie_plan_mg(m, gstep):
+    """Bố trí đai phụ cổ móng (giữ các thanh cách nhau <= 400 mm) theo số thanh 1 cạnh m và bước giữ thanh."""
+    if m <= 2:
+        return None, []
+    lst, i = [], 0
+    while i <= (m - 1) / 2.0:
+        lst.append(i)
+        i += gstep
+    res = []
+    for j in lst:
+        if j not in res:
+            res.append(j)
+        if (m - 1 - j) not in res:
+            res.append(m - 1 - j)
+    res.sort()
+    extra, cur = [], res[0]
+    for nx in res[1:]:
+        while nx - cur > gstep:
+            cur += gstep
+            extra.append(cur)
+        cur = nx
+    res = sorted(set(res + extra))
+    ti = sorted({j for j in res if 0 < j < m - 1})
+    runs, cur = [], []
+    for j in ti:
+        if cur and j == cur[-1] + 1:
+            cur.append(j)
+        else:
+            if cur:
+                runs.append(cur)
+            cur = [j]
+    if cur:
+        runs.append(cur)
+    grp, st = None, []
+    for run in runs:
+        if grp is None and len(run) >= 2 and (m - 1 - run[0]) in run:
+            c = len(run) if len(run) <= 3 else (2 if len(run) % 2 == 0 else 3)
+            off = (len(run) - c) // 2
+            grp = run[off:off + c]
+            st += [j for j in run if j not in grp]
+        else:
+            st += run
+    return grp, sorted(st)
+
+
+
 class Geo:
     """Toàn bộ kích thước bố trí của 1 móng."""
 
@@ -331,56 +377,14 @@ class Geo:
     def m_bars(self):
         return 1 + int(self.g("RC_N") / 4.0)
 
-    def tie_idx(self):
+    def tie_plan(self):
+        """Đai phụ cổ móng: (nhóm thanh của đai bát giác, các thanh có đai phụ thẳng) theo chỉ số thanh 1 cạnh."""
         m = self.m_bars()
         w = 1000.0 * (self.g("BB") - 2 * self.g("COVER"))
         if m <= 2 or (w <= 400.0 and m <= 4):
-            return []
+            return None, []
         s = w / (m - 1)
-        g = max(1, min(2, int(400.0 / s)))
-        lst, i = [], 0
-        while i <= (m - 1) / 2.0:
-            lst.append(i)
-            i += g
-        res = []
-        for j in lst:
-            if j not in res:
-                res.append(j)
-            if (m - 1 - j) not in res:
-                res.append(m - 1 - j)
-        res.sort()
-        extra, cur = [], res[0]
-        for nx in res[1:]:
-            while nx - cur > g:
-                cur += g
-                extra.append(cur)
-            cur = nx
-        res = sorted(set(res + extra))
-        return sorted({j for j in res if 0 < j < m - 1})
-
-    def tie_plan(self):
-        ti = self.tie_idx()
-        m = self.m_bars()
-        runs, cur = [], []
-        for j in ti:
-            if cur and j == cur[-1] + 1:
-                cur.append(j)
-            else:
-                if cur:
-                    runs.append(cur)
-                cur = [j]
-        if cur:
-            runs.append(cur)
-        grp, st = None, []
-        for run in runs:
-            if grp is None and len(run) >= 2 and (m - 1 - run[0]) in run:
-                c = len(run) if len(run) <= 3 else (2 if len(run) % 2 == 0 else 3)
-                off = (len(run) - c) // 2
-                grp = run[off:off + c]
-                st += [j for j in run if j not in grp]
-            else:
-                st += run
-        return grp, sorted(st)
+        return tie_plan_mg(m, max(1, min(2, int(400.0 / s))))
 
     def oct_dim(self):
         grp = self.tie_plan()[0]
