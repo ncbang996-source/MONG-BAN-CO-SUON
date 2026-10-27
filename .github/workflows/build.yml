@@ -19,12 +19,6 @@ jobs:
         run: python tests/smoke.py
       - name: Kiểm tra giao diện (tab 3D) + chụp màn hình
         run: python tests/ui_smoke.py
-      - name: Gửi ảnh 1
-        run: python tests/shot_annot.py 2_3d_toan_mong.png
-      - name: Gửi ảnh 2
-        run: python tests/shot_annot.py 4_3d_cat_1_4.png
-      - name: Gửi ảnh 3
-        run: python tests/shot_annot.py 5_3d_phong_to.png
       - uses: actions/upload-artifact@v4
         if: always()
         with:
