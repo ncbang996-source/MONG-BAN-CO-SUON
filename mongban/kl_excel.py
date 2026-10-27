@@ -273,10 +273,9 @@ def export(p: dict, g: Geo, path: str):
                "Mỗi ô: ROUNDUP((bề rộng ô − 2cv)/@ chống) ; cộng ô lỗ", "hàng")
     chh = line("", "Thanh chống rơi vào lỗ (bỏ)", "chH",
                f"=IF({has_hole},{CELLS('TS_c-2*TS_cv', 'TS_sch1/1000')}^2,0)", "(số ô trong lỗ)²", "thanh")
-    nf = line("", "Thép chủ dầm dài suốt (1 mặt)", "nf",
-              "=IF(TS_nd<5,TS_nd,MIN(TS_nd,IF(MOD(TS_nd,4)=0,TS_nd/2,INT(TS_nd/2)+1)))",
-              "n < 5: không cắt (= n) ; n chia hết 4: n/2 ; còn lại: INT(n/2)+1", "thanh")
-    ncut = line("", "Thép chủ dầm ngắt (1 mặt)", "nc", f"=TS_nd-{nf}", "n − nf", "thanh")
+    nf0 = line("", "Thép chủ dầm dài suốt theo công thức (dưới 10 thanh)", "nf0",
+               "=IF(TS_nd<5,TS_nd,MIN(TS_nd,IF(MOD(TS_nd,4)=0,TS_nd/2,INT(TS_nd/2)+1)))",
+               "n < 5: không cắt (= n) ; n chia hết 4: n/2 ; còn lại: INT(n/2)+1", "thanh")
     cuty = line("", "Đoạn cắt mỗi đầu thanh ngắt - dầm theo Y", "cutY", f"=ROUNDUP({d2}/0.2-0.000001,0)*0.1",
                 "½·D2 làm tròn lên 100 mm (tính từ mép móng)", "m")
     cutx = line("", "Đoạn cắt mỗi đầu thanh ngắt - dầm theo X", "cutX", f"=ROUNDUP({d1}/0.2-0.000001,0)*0.1",
@@ -323,6 +322,41 @@ def export(p: dict, g: Geo, path: str):
               f"=IF({nrow}<2,0,IF({fm}=1,IF({nrow}=2,{lastf}+{adj},IF({nrow}=3,{mrow}-{adj},{mrow})),"
               f"IF({nrow}=2,TS_nd-ROUNDUP(TS_nd/2,0),ROUNDUP(TS_nd/{nrow},0))))",
               "Theo cách xếp ở trên", "thanh")
+    # bảng từng hàng (>= 10 thanh, nhiều hàng): cắt so le theo hàng, hàng 2 thanh xét từ trong ra
+    NR = 8
+    r += 1
+    for i, h in enumerate(["", "Hàng thép chủ dầm (1 mặt, từ ngoài vào)", "Số thanh", "Ngắt so le",
+                           "Ngắt hàng 2 thanh", ""], 1):
+        _cell(wk, r, i, h, bold=True, fill=HEAD, align=Alignment(horizontal="center", vertical="center", wrap_text=True))
+    rr0 = r + 1
+    rr1 = r + NR
+    for i in range(1, NR + 1):
+        r += 1
+        kk = f"C{r}"
+        _cell(wk, r, 1, "", align=Alignment(horizontal="center"))
+        _cell(wk, r, 2, f"Hàng {i}")
+        _cell(wk, r, 3, f"=IF({i}>{nrow},0,IF({fm}=1,IF({nrow}=1,TS_nd,IF({i}<{nrow}-1,{mrow},IF({i}={nrow}-1,"
+                        f"{mrow}-{adj},{lastf}+{adj}))),IF({i}<{nrow},ROUNDUP(TS_nd/{nrow},0),"
+                        f"TS_nd-ROUNDUP(TS_nd/{nrow},0)*({nrow}-1))))", "0")
+        _cell(wk, r, 4, f"=IF({kk}>=3,2*INT((INT(({kk}-2)/2)+1)/2)+IF(AND(MOD({kk},2)=1,MOD(({kk}-1)/2,2)=1),1,0),0)",
+              "0")
+        after = f"SUM(E{r + 1}:E{rr1})" if i < NR else "0"
+        tot = f"(SUM($D${rr0}:$D${rr1})+{after}+{kk})"
+        _cell(wk, r, 5, f"=IF(AND({kk}>=1,{kk}<=2,{tot}<=TS_nd-{tot}),{kk},0)", "0")
+        _cell(wk, r, 6, "thanh", align=Alignment(horizontal="center"))
+    r += 1
+    _cell(wk, r, 2, "Cách tính", bold=True)
+    c_ = _cell(wk, r, 3, "Hàng >= 3 thanh: thanh góc dài suốt, ngắt xen kẽ từ 2 phía vào (5 thanh: vị trí 2, 4; "
+               "4 thanh: 2, 3; 3 thanh: giữa). Hàng 2 thanh (xét từ trong ra): ngắt cả 2 nếu số thanh dài suốt "
+               "vẫn >= số thanh ngắt. Áp dụng khi n >= 10 và có nhiều hàng (tối đa 8 hàng).")
+    wk.merge_cells(start_row=r, start_column=3, end_row=r, end_column=6)
+    c_.alignment = Alignment(vertical="center", wrap_text=True)
+    wk.row_dimensions[r].height = 45
+    so_le = f"AND(TS_nd>=10,{nrow}>1)"
+    ncut = line("", "Thép chủ dầm ngắt (1 mặt)", "nc",
+                f"=IF({so_le},SUM(D{rr0}:E{rr1}),TS_nd-{nf0})",
+                "n >= 10 nhiều hàng: tổng số thanh ngắt ở bảng trên ; còn lại: n − nf0", "thanh")
+    nf = line("", "Thép chủ dầm dài suốt (1 mặt)", "nf", f"=TS_nd-{ncut}", "n − nc (luôn >= nc)", "thanh")
     has2 = line("", "Có đai phụ giữ lớp 2", "t2", f"=IF({k2}>2,1,0)",
                 "= 1 khi hàng 2 có > 2 thanh (hàng 2 chỉ 2 thanh thì nằm sát 2 nhánh đai chính)", "")
     full2 = line("", "Đai phụ giữ lớp 2 rải suốt dầm", "t2f",

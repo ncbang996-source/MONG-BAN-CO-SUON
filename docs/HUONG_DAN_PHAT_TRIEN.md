@@ -183,8 +183,10 @@ Nguyên tắc:
   - Hàng có 1 phần thanh ngắt: thanh góc dài suốt, thanh ngắt xen kẽ ở cột trong (so le), ví dụ 5 thanh thì cắt
     cột 2 và 4.
   - Thanh ngắt cắt mỗi đầu ½ khoảng mép dầm → mép móng, làm tròn lên 100, tính từ mép móng.
-  - Từ 10 thanh trở lên thì cắt so le: thanh góc dài suốt, thanh ngắt ở các cột trong xen kẽ, giống nhau ở mọi
-    hàng.
+  - Từ 10 thanh trở lên (nhiều hàng): mỗi hàng >= 3 thanh giữ thanh góc dài suốt, ngắt xen kẽ từ 2 phía vào
+    (5 thanh: vị trí 2, 4; 4 thanh: 2, 3; 3 thanh: thanh giữa). Hàng 2 thanh (xét từ trong ra) ngắt cả 2 nếu số
+    thanh dài suốt vẫn >= số thanh ngắt. Ví dụ 5+4+2: 7 dài suốt / 4 ngắt; 5+5+2: 6 / 6.
+  - Số thanh dài suốt luôn >= số thanh ngắt.
   - Thép đáy dầm tựa trên lớp thép bản vuông góc với dầm.
 - **Thép giá:**
   - Theo TCVN 5574:2018 mục 10.3.3.3: h > 700 thì số mức mỗi bên = ROUNDUP((z_trên − z_dưới)/400) − 1.

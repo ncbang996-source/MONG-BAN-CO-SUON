@@ -260,18 +260,25 @@ class Geo:
     def _full_flags(self, n, per, uss):
         """Thanh dài suốt (True) / thanh ngắt (False) theo từng hàng.
         < 10 thanh: lấp đầy thanh dài suốt từ hàng ngoài cùng, hàng còn thiếu đặt thanh dài suốt ở 2 đầu.
-        >= 10 thanh (nhiều hàng): cắt so le - thanh góc luôn dài suốt, thanh ngắt ở các cột trong xen kẽ
-        (cột 2, 4, ...) giống nhau ở mọi hàng; thừa / thiếu thì ưu tiên cột gần tim dầm."""
+        >= 10 thanh (nhiều hàng): cắt so le theo từng hàng (thanh góc dài suốt), hàng 2 thanh cắt cả 2 nếu
+        số thanh dài suốt vẫn >= số thanh ngắt; n_full / n_cut lấy theo bố trí này."""
         fls = [[True] * c for c in per]
-        need = self.n_cut
         if n >= 10 and len(per) > 1:
-            cand = []                                  # (ưu tiên, hàng, cột)
-            for i, us in enumerate(uss):
-                for j in range(1, len(us) - 1):
-                    cand.append((0 if j % 2 == 1 else 1, round(abs(us[j]), 6), i, j))
-            cand.sort()
-            for _, _, i, j in cand[:need]:
-                fls[i][j] = False
+            # hàng >= 3 thanh: cắt xen kẽ từ 2 phía vào (5 thanh: vị trí 2, 4; 4 thanh: 2, 3; 3 thanh: giữa)
+            cut = 0
+            for i, cnt in enumerate(per):
+                if cnt >= 3:
+                    for j in range(1, cnt - 1):
+                        if min(j, cnt - 1 - j) % 2 == 1:
+                            fls[i][j] = False
+                            cut += 1
+            # hàng 2 thanh (xét từ hàng trong cùng ra): cắt cả 2 nếu vẫn còn số thanh dài suốt >= số thanh ngắt
+            for i in reversed(range(len(per))):
+                cnt = per[i]
+                if cnt <= 2 and cut + cnt <= n - (cut + cnt):
+                    fls[i] = [False] * cnt
+                    cut += cnt
+            self.n_cut, self.n_full = cut, n - cut
             return fls
         left = self.n_full
         for i, cnt in enumerate(per):
