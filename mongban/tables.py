@@ -8,16 +8,17 @@ from .view import ni, rpl, tie
 T_TBL = "BẢNG THỐNG KÊ CỐT THÉP (CHO 01 MÓNG)"
 T_TBLH = ["SỐ HIỆU", "HÌNH DẠNG - KÍCH THƯỚC (mm)", "%%C (mm)", "CHIỀU DÀI 1 THANH (mm)", "SỐ LƯỢNG",
           "TỔNG C.DÀI (m)", "KL (kg)"]
-CW = [10.0, 44.0, 10.0, 18.0, 15.0, 18.0, 17.0]
+CW = [10.0, 46.0, 10.0, 18.0, 16.0, 19.0, 18.0]
+TH = 2.0                                  # chiều cao chữ trong bảng = chữ trong bản vẽ
 STRAIGHT = (1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 15, 23)
 TALL = (9, 16, 20, 22)
 
 
 def lbl(c: Ctx, x, y, s, rot=0.0):
     if rot:
-        c.txr("BANG", x, y, 1.3, s, rot)
+        c.txr("BANG", x, y, TH, s, rot)
     else:
-        c.txc("BANG", x, y, 1.3, s)
+        c.txc("BANG", x, y, TH, s)
 
 
 def row_h(pos, base):
@@ -34,7 +35,7 @@ def shape(c: Ctx, r, x, y, w, h):
     yc, xm, lay = y + h / 2, x + w / 2, "BANG"
     if pos in STRAIGHT:
         c.ln(lay, x + 4, yc - 0.6, x + w - 4, yc - 0.6)
-        lbl(c, xm, yc + 0.9, ni(ln))
+        lbl(c, xm, yc + 1.2, ni(ln))
     elif pos in (6, 7, 8, 24):
         # chữ U: 2 chân d0, d1, thân d2 (thanh chống: chân nằm ngang)
         hu = min(h - 3.2, 6.0)
@@ -43,14 +44,14 @@ def shape(c: Ctx, r, x, y, w, h):
         if pos == 6:   # thanh chống: thân đứng, 2 chân ngang
             yb, yt = yc - hu / 2, yc + hu / 2
             rpl(c, lay, [(xm + 5.0, yb), (xm, yb), (xm, yt), (xm + 5.0, yt)], False, 0.4)
-            lbl(c, xm - 2.2, yc, ni(d[2]), 90.0)
+            lbl(c, xm - 2.6, yc, ni(d[2]), 90.0)
             lbl(c, xm + 3.0, yb + 0.9, ni(d[0]))
             lbl(c, xm + 3.0, yt + 0.9, ni(d[1]))
             return
         rpl(c, lay, [(x0, y0 + hu), (x0, y0), (x1, y0), (x1, y0 + hu)], False, 0.5)
-        lbl(c, xm, y0 + 0.9, ni(d[2]))
-        lbl(c, x0 - 1.4, y0 + hu / 2, ni(d[0]), 90.0)
-        lbl(c, x1 + 1.4, y0 + hu / 2, ni(d[1]), 90.0)
+        lbl(c, xm, y0 + 1.3, ni(d[2]))
+        lbl(c, x0 - 1.8, y0 + hu / 2, ni(d[0]), 90.0)
+        lbl(c, x1 + 1.8, y0 + hu / 2, ni(d[1]), 90.0)
     elif pos in (9, 20):
         s = min(h - 3.5, 9.0)
         x0, y0 = xm - s / 2, yc - s / 2
@@ -58,7 +59,7 @@ def shape(c: Ctx, r, x, y, w, h):
         c.ln(lay, x0 + s, y0 + 0.14 * s, x0 + 0.87 * s, y0 + 0.27 * s)
         c.ln(lay, x0 + 0.86 * s, y0, x0 + 0.73 * s, y0 + 0.13 * s)
         lbl(c, xm, y0 + s + 0.9, ni(d[1]))
-        lbl(c, x0 - 1.5, yc, ni(d[1]), 90.0)
+        lbl(c, x0 - 1.9, yc, ni(d[1]), 90.0)
         lbl(c, x0 + s + 3.5, y0 + 0.8, ni(d[0]))
     elif pos == 16:
         hh = min(h - 3.5, 9.0)
@@ -68,7 +69,7 @@ def shape(c: Ctx, r, x, y, w, h):
         c.ln(lay, x0 + ww, y0 + 0.9, x0 + ww - 1.0, y0 + 1.9)
         c.ln(lay, x0 + ww - 0.9, y0, x0 + ww - 1.9, y0 + 1.0)
         lbl(c, xm, y0 + hh + 0.9, ni(d[1]))
-        lbl(c, x0 - 1.5, yc, ni(d[2]), 90.0)
+        lbl(c, x0 - 1.9, yc, ni(d[2]), 90.0)
         lbl(c, x0 + ww + 3.5, y0 + 0.8, ni(d[0]))
     elif pos in (17, 18, 21):
         x0, x1 = x + 0.15 * w + 3.0, x + w - 0.15 * w - 3.0
@@ -95,8 +96,8 @@ def shape(c: Ctx, r, x, y, w, h):
 def steel_table(c: Ctx, g, tx, ty, ybot):
     """Bảng thống kê thép, đỉnh tại ty, co chiều cao dòng để đáy bảng không thấp hơn ybot."""
     rows = g.kl
-    hh = 10.0
-    base = 6.4
+    hh = 13.0
+    base = 6.8
     tot = sum(row_h(r["pos"], 1.0) for r in rows)
     base = max(4.2, min(base, (ty - hh - 6.0 - ybot) / tot))
     hs = [row_h(r["pos"], base) for r in rows]
@@ -122,15 +123,15 @@ def steel_table(c: Ctx, g, tx, ty, ybot):
             for wd in words:              # ngắt dòng tiêu đề theo bề rộng cột
                 t = (cur + " " + wd).strip()
                 from .cad import txtw
-                if cur and txtw(t, 1.4) > w - 1.5:
+                if cur and txtw(t, TH) > w - 1.5:
                     lines.append(cur)
                     cur = wd
                 else:
                     cur = t
             lines.append(cur)
-            y0 = ty - hh / 2 + (len(lines) - 1) * 1.0
+            y0 = ty - hh / 2 + (len(lines) - 1) * 1.35
             for j, t in enumerate(lines):
-                c.txc("BANG", xs + w / 2, y0 - 2.0 * j, 1.4, t)
+                c.txc("BANG", xs + w / 2, y0 - 2.7 * j, TH, t)
             xs += w
         y = ty - hh
         ssum = 0.0
@@ -138,16 +139,16 @@ def steel_table(c: Ctx, g, tx, ty, ybot):
             y -= h
             ym = y + h / 2
             ssum += r["kg"]
-            c.txc("BANG", tx + CW[0] / 2, ym, 1.8, g.sq(r["pos"]))
+            c.txc("BANG", tx + CW[0] / 2, ym, TH, g.sq(r["pos"]))
             shape(c, r, tx + CW[0], y, CW[1], h)
             xs = tx + CW[0] + CW[1]
             vals = [ni(r["dia"]), ni(r["len"]), r["qty"], f"{r['tot']:.2f}", f"{r['kg']:.2f}"]
             for v, w in zip(vals, CW[2:]):
-                c.txc("BANG", xs + w / 2, ym, 1.6, v)
+                c.txc("BANG", xs + w / 2, ym, TH, v)
                 xs += w
         c.ln("BANG", tx, yend - 6.0, tx + wcol, yend - 6.0)
-        c.txj("BANG", tx + 3.0, yend - 4.2, 1.6, "CỘNG", 0)
-        c.txc("BANG", tx + wcol - CW[-1] / 2, yend - 3.4, 1.6, f"{ssum:.2f}")
+        c.txj("BANG", tx + 3.0, yend - 4.2, TH, "CỘNG", 0)
+        c.txc("BANG", tx + wcol - CW[-1] / 2, yend - 3.0, TH, f"{ssum:.2f}")
     return yend - 6.0
 
 
@@ -156,15 +157,15 @@ def summary_cols(g):
     cls = [x for x in g.klc if x[2] > 1e-6]
     tot = sum(x[2] for x in cls)
     cols = [(p["BTM"], "(m3)", 14.0, f"{model.vol_mong(p):.2f}"),
-            (p["BTL"], "(m3)", 14.0, f"{model.vol_lot(p):.2f}")]
+            (p["BTL"], "(m3)", 13.0, f"{model.vol_lot(p):.2f}")]
     for d, _, w in cls:
-        cols.append((f"%%C{int(d + 0.5)}", "(kg)", 13.0, f"{w:.2f}"))
+        cols.append((f"%%C{int(d + 0.5)}", "(kg)", 14.0, f"{w:.2f}"))
     if cls:
-        cols.append(("TỔNG K.LƯỢNG", "THÉP (kg)", 18.0, f"{tot:.2f}"))
+        cols.append(("TỔNG K.LƯỢNG", "THÉP (kg)", 19.0, f"{tot:.2f}"))
     if g.hasCushion:
-        cols.append(("K.LƯỢNG", "ĐỆM CÁT (m3)", 17.0, f"{model.vol_cat(p):.2f}"))
-        cols.append(("DIỆN TÍCH", "VẢI ĐỊA (m2)", 17.0, f"{model.area_vai(p):.2f}"))
-    cols.append(("BULONG", "NEO", 15.0, model.bolt_text(p)))
+        cols.append(("K.LƯỢNG", "ĐỆM CÁT (m3)", 18.0, f"{model.vol_cat(p):.2f}"))
+        cols.append(("DIỆN TÍCH", "VẢI ĐỊA (m2)", 18.0, f"{model.area_vai(p):.2f}"))
+    cols.append(("BULONG", "NEO", 14.0, model.bolt_text(p)))
     return cols
 
 
@@ -186,8 +187,8 @@ def summary(c: Ctx, g, xr, y0):
         xs = x0
         for col in cols:
             xm = xs + col[2] / 2
-            c.txc("BANG", xm, y0 - 4.0, 1.5, col[0])
-            c.txc("BANG", xm, y0 - 8.5, 1.5, col[1])
-            c.txc("BANG", xm, y0 - hh - 4.0, 1.8, col[3])
+            c.txc("BANG", xm, y0 - 3.8, TH, col[0])
+            c.txc("BANG", xm, y0 - 8.4, TH, col[1])
+            c.txc("BANG", xm, y0 - hh - 4.0, TH, col[3])
             xs += col[2]
     return y0 - hh - rh

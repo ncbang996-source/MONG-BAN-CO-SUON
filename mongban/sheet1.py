@@ -391,6 +391,7 @@ def dim_plan(c: Ctx, g: Geo, v: V):
         qx, qy = -g.dx, -g.dy
         xa = qx + a / 2
         v.dimH((xa, qy + a / 2), (xa + g.e, qy + a / 2), v.y(qy + a / 2 + g.e) + 2.5)
+        v.dimV((xa, qy + a / 2), (xa, qy + a / 2 + g.e), v.x(xa + g.e) + 2.5)        # cạnh vát phương còn lại
     if g.hasHole:
         h = g.c / 2
         ml_ = model.ML if h > model.ML else 0.0
@@ -426,7 +427,7 @@ def draw_plan(c: Ctx, g: Geo, detail: bool):
     # ký hiệu mặt cắt A-A
     xl, xr = v.x(-g.Lh - model.ML) - 36.0, v.x(g.Lh + model.ML) + 22.0
     if detail:
-        xr = v.x(g.Lh + model.ML) + 2.0 + 7.76
+        xr = v.x(g.Lh + model.ML) + 5.0 + 7.76
     marker(c, xl, cy, 1.0, "A")
     marker(c, xr, cy, -1.0, "A")
     if detail:
@@ -459,6 +460,7 @@ def plan_bars(c: Ctx, g: Geo, v: V):
     L, B, a, cov = g.Lh, g.Bh, g.a, g.cov
     d = p["RS_D"]
     xr = v.x(L + model.ML) + 3.0
+    cx_ = v.x(0.0)
 
     def mid(lst):
         return lst[len(lst) // 2] if lst else None
@@ -483,7 +485,7 @@ def plan_bars(c: Ctx, g: Geo, v: V):
         c.ci("CHU", v.x(xm), v.y(y), 0.5)
         s = p["RS_S2"] if kd == "out" else p["RS_S1"]
         lo_, hi_ = v.y(min(yy)), v.y(max(yy))
-        by = 0.5 * (lo_ + hi_) if pos == 4 else 0.5 * (lo_ + hi_) + (0.2 * (hi_ - lo_) if kd == "in" else 0.0)
+        by = 0.5 * (lo_ + hi_) + 2.5 if pos == 4 else 0.5 * (lo_ + hi_) + (0.2 * (hi_ - lo_) if kd == "in" else 0.0)
         for u in used:
             if abs(by - u) < 8.0:
                 by = max(lo_ + 0.5, min(hi_ - 0.5, u - 8.0 if by < u else u + 8.0))
@@ -517,7 +519,8 @@ def plan_bars(c: Ctx, g: Geo, v: V):
         by = max(ylo, yq)
         co([v.P(xt, ybar)], xr, by, 1, pos, phi(d, s), f"SL:{2 * len(xx)}%%C{int(d)} - 2 LỚP", tick=False,
            mode=True)
-    # --- thép xiên góc lỗ (5) ở góc trên phải của lỗ: 1 đoạn ngang + 1 đoạn xiên
+    # --- thép xiên góc lỗ (5) ở góc trên phải của lỗ; tag đặt ở khoảng trống phía trên lỗ,
+    #     leader 1 đoạn ngang + 1 đoạn xiên
     if g.hasHole and g.n5:
         m = max(1, g.n5 // 8)
         cc = g.c / 2
@@ -529,8 +532,10 @@ def plan_bars(c: Ctx, g: Geo, v: V):
             t = cov * math.sqrt(2) + 0.05 + j * s5
             ox, oy = cc + t * r2, cc + t * r2
             v.ln("COTTHEP", ox + r2 * hl, oy - r2 * hl, ox - r2 * hl, oy + r2 * hl)
-            pts.append(v.P(ox + r2 * 0.6 * hl, oy - r2 * 0.6 * hl))
-        co([pts[-1]], pts[-1][0] + 3.0, pts[-1][1] - 3.5, 1, 5, f"{g.n5 // 4}%%C{int(d)}")
+            pts.append(v.P(ox - r2 * 0.45 * hl, oy + r2 * 0.45 * hl))
+        q = pts[-1]
+        yb = min(v.y(g.dy - a / 2 - g.e) - 4.0, q[1] + 6.0)
+        co([q], max(q[0] - 2.0, cx_ + 3.5), yb, -1, 5, f"{g.n5 // 4}%%C{int(d)}", "02 LỚP")
     # --- thép chủ dầm: trên mặt bằng chỉ thấy các thanh lớp ngoài cùng, vẽ từ trục đối xứng tới đầu dầm
     full_y, cut_y = g.rib_len(True)
     full_x, cut_x = g.rib_len(False)
@@ -550,7 +555,7 @@ def plan_bars(c: Ctx, g: Geo, v: V):
     # kích thước đoạn cắt tính từ mép móng
     v.dimV((g.dx - a / 2, cut_y / 2), (g.dx - a / 2, B), v.x(g.dx - a / 2) - 3.0)
     v.dimH((cut_x / 2, g.dy + a / 2), (L, g.dy + a / 2), v.y(g.dy + a / 2) + 2.5)
-    xt = 0.5 * (cut_x / 2 + full_x / 2)
+    xt = full_x / 2 - 0.25            # gần đầu thanh, tránh chữ kích thước đoạn cắt
     co([v.P(xt, g.dy + u) for u in uf], xr, v.y(g.dy + a / 2) + 7.0, 1, 13, f"{g.n_full}%%C{dm}", tick=True,
        mode=True)
     if g.n_cut:

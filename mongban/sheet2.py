@@ -87,16 +87,16 @@ def rib_section(c: Ctx, g: Geo, co: Callouts, ox, oy, along_y: bool, name: str):
         for u, _ in row:
             v.disc("COTTHEP", u, z, rm)
     rg = v.rbar(p["RS_D"])
+    rh = max(rm, rg) + 0.12      # móc 2 đầu của mọi thanh đai phụ (thép giá + giữ lớp 2) bằng nhau
     for z in g.z_gia:
         for s in (-1, 1):
             v.disc("COTTHEP", s * g.u_gia, z, rg)
         tie(c, "DAI", v.x(-g.u_gia - g.dg / 2 - 0.004), v.y(z - g.dg / 2 - 0.004), 1.0, 0.0,
-            v.k * (2 * g.u_gia + g.dg + 0.008), 0.35, 1.4)
+            v.k * (2 * g.u_gia + g.dg + 0.008), rh, 1.4)
     if g.has_vtie():
         v.ln("DAI", 0.0, covb + g.dt, 0.0, hd - cov - g.dt)
     um = g.u_tie2()
     zt2 = g.z_tie2()             # đai phụ giữ lớp thép 2: ngay dưới hàng lớp 2, móc ôm 2 thanh biên
-    rh = rm + 0.12
     for z in zt2:
         tie(c, "DAI", v.x(-um), v.y(z), 1.0, 0.0, v.k * 2 * um, rh, 1.4)
     # chú thích: thép chủ - gióng vuông góc tới từng thanh (không xẹt); đai - leader ngang có xẹt 45°
@@ -109,26 +109,32 @@ def rib_section(c: Ctx, g: Geo, co: Callouts, ox, oy, along_y: bool, name: str):
     co([v.P(u, rt0[0]) for u in full], v.x(-a / 2) - 1.0, v.y(hd) + 6.0, -1, pf, f"{len(full)}%%C{dmm}",
        tick=False, mode=True)
     v.dimH((-a / 2, hd), (a / 2, hd), v.y(hd) + 11.5)
-    # bên phải, từ trên xuống
+    # bên phải, từ trên xuống: tag đặt sát dầm, trên phần bản móng nếu đủ chỗ
+    xin = v.x(a / 2) + 2.0
+    yslab = v.y(hs) + 3.5
+
+    def ex_r(by):
+        return xin if by >= yslab else xr
     yprev = v.y(hd) + 2.0
     cut = [(u, z) for z, row in g.rows_t for u, f in row if not f]
     if cut:                      # thanh ngắt lớp 2: gióng từ dưới lên
         by = v.y(cut[0][1]) - 2.5
-        co([v.P(u, z) for u, z in cut], xr, by, 1, pc, f"{len(cut)}%%C{dmm}", tick=False, mode=True)
+        co([v.P(u, z) for u, z in cut], ex_r(by), by, 1, pc, f"{len(cut)}%%C{dmm}", tick=False, mode=True)
         yprev = by
     by = yprev - 6.0
-    co([(v.x(w2), by)], xr, by, 1, 16, phi(p["RDT_D"], p["RDT_S"]), mode=True)
+    co([(v.x(w2), by)], ex_r(by), by, 1, 16, phi(p["RDT_D"], p["RDT_S"]), mode=True)
     yprev = by
     if g.n_gia:                  # thép giá: đường ngang dưới 2 chấm, gióng vuông góc lên (như tag 10, 11)
         by = min(v.y(g.z_gia[-1]) - 2.5, yprev - 6.0)
-        co([v.P(s_ * g.u_gia, g.z_gia[-1]) for s_ in (-1, 1)], xr, by, 1, pg, f"{2 * g.n_gia}%%C{ni(p['RS_D'])}",
-           tick=False, mode=True)
+        co([v.P(s_ * g.u_gia, g.z_gia[-1]) for s_ in (-1, 1)], ex_r(by), by, 1, pg,
+           f"{2 * g.n_gia}%%C{ni(p['RS_D'])}", tick=False, mode=True)
         yprev = by
     zt17 = sorted([z - g.dg / 2 - 0.004 for z in g.z_gia] + zt2, reverse=True)
-    if zt17:                     # đai phụ ngang: 1 leader đứng qua mọi vị trí (thép giá + giữ lớp 2)
+    if zt17:                     # đai phụ ngang: 1 leader đứng qua mọi vị trí, đặt ở khe giữa 2 thanh thép chủ
         by = yprev - 6.0
-        u17 = 0.3 * (um if um else g.u_gia)
-        co([v.P(u17, z) for z in zt17], xr, by, 1, 17, phi(p["RDP_D"], p["RDP_S"]), mode=True)
+        us = sorted(u for u, _ in g.rows_b[0][1])
+        u17 = 0.5 * (us[-1] + us[-2]) if len(us) > 1 else 0.5 * w2
+        co([v.P(u17, z) for z in zt17], ex_r(by), by, 1, 17, phi(p["RDP_D"], p["RDP_S"]), mode=True)
     if g.has_vtie():
         zm = 0.5 * (hs + hd)
         co([v.P(0.0, zm)], v.x(-a / 2) - 1.0, v.y(zm), -1, 18, phi(p["RDP_D"], p["RDP_S"]), mode=True)
@@ -139,16 +145,31 @@ def rib_section(c: Ctx, g: Geo, co: Callouts, ox, oy, along_y: bool, name: str):
     if len(dl) >= 2:
         co([v.P(dl[0], zd_t), v.P(dl[1], zd_t)], v.x(dl[0]) - 1.0, v.y(hs) + 4.5, -1, pd_, phi(ds, p["RS_S2"]),
            tick=False)
-    if len(dr) >= 2:
-        co([v.P(dr[-1], zd_b), v.P(dr[-2], zd_b)], v.x(dr[-1]) + 1.0, v.y(-tl) - 4.0, 1, pd_, phi(ds, p["RS_S1"]),
-           tick=False)
-    co([v.P(ul + 0.12, zl_b), v.P(ul + 0.12, zl_t)], xl, v.y(-tl) - 4.0, -1, pl_, phi(ds, p["RS_S2"]), mode=True)
+    zch = 0.5 * (zi_b + zi_t)
     chl = [u for u in chs if u < -a / 2]
     chr_ = [u for u in chs if u > a / 2]
+    # bên dưới, trái: thép đường (3) và thanh chống (6); tag thấp hơn chỉ vào mục tiêu xa hơn -> không giao chéo
+    yb1, yb2 = v.y(-tl) - 4.0, v.y(-tl) - 10.0
+    lt = []
     if chl:
-        co([v.P(chl[0], 0.5 * (zi_b + zi_t))], xl, v.y(-tl) - 10.0, -1, 6, phi(p["RCH_D"], p["RCH_S2"]))
+        u3 = chl[0] + 0.1 if chl[0] + 0.1 < -a / 2 - 0.05 else ul + 0.12
+        lt.append((chl[0], "6", [v.P(chl[0], zch)], 6, phi(p["RCH_D"], p["RCH_S2"]), False))
+    else:
+        u3 = ul + 0.12
+    lt.append((u3, "3", [v.P(u3, zl_b), v.P(u3, zl_t)], pl_, phi(ds, p["RS_S2"]), True))
+    lt.sort(key=lambda q: q[0])
+    for (u, _, tg, num, txt, md), by in zip(lt, (yb1, yb2)):
+        co(tg, xl, by, -1, num, txt, mode=md)
+    # bên dưới, phải: chấm thép bản (1) và thanh chống (6)
+    rt = []
+    if len(dr) >= 2:
+        rt.append((dr[-2], [v.P(dr[-1], zd_b), v.P(dr[-2], zd_b)], pd_, phi(ds, p["RS_S1"]), False))
     if chr_:
-        co([v.P(chr_[-1], 0.5 * (zi_b + zi_t))], xr, v.y(-tl) - 10.0, 1, 6, phi(p["RCH_D"], p["RCH_S1"]))
+        rt.append((chr_[-1], [v.P(chr_[-1], zch)], 6, phi(p["RCH_D"], p["RCH_S1"]), True))
+    rt.sort(key=lambda q: -q[0])
+    for (u, tg, num, txt, tk), by in zip(rt, (yb1, yb2)):
+        ex = max(q[0] for q in tg) + 1.0
+        co(tg, ex if num == pd_ else xr, by, 1, num, txt, tick=tk)
     # kích thước
     xd = v.x(ul) - 4.0
     v.dimV((ul, -tl), (ul, 0.0), xd)
@@ -255,7 +276,8 @@ def haunch_plan(c: Ctx, g: Geo, co: Callouts, ox, oy):
     co([v.P(*q) for q in top], xr, v.y(yb) - 2.0, 1, 7, f"4%%C{ni(p['RDT_D'])}", tick=False)   # 2 đường xiên chụm lại
     # chú thích họ thanh 8 (theo bản vẽ mẫu): đường mảnh vuông góc cắt qua cả họ, xẹt tại từng thanh, nối ra tag
     for (nx, ny, ux, uy, ts), yt in zip(fams, (0.35 * R, -0.5 * R)):
-        o = 0.25 * l8 * (1 if ny > 0 else -1)
+        o = 0.5 * (ts[-1] + ts[-2]) if len(ts) > 1 else 0.25 * l8   # đặt ở khe giữa 2 thanh họ kia (không trùng nét)
+        o = o * (1 if ny > 0 else -1)
         p1 = (nx * (ts[0] - 0.08) + ux * o, ny * (ts[0] - 0.08) + uy * o)
         p2 = (nx * (ts[-1] + 0.08) + ux * o, ny * (ts[-1] + 0.08) + uy * o)
         with c.item(f"cross8{int(ny > 0)}", "Đường gióng thép 8"):
@@ -473,12 +495,12 @@ def half_bb(c: Ctx, g: Geo, co: Callouts, xax, ytop):
     gaps = [0.5 * (hz[i] + hz[i + 1]) for i in range(len(hz) - 1)]
     zl = zt - 0.02 - (int(p["RL_N"]) - 1) * s_l - 0.06       # dưới lưới đầu trụ
     gaps = [z for z in gaps if z < zl and v.y(z) <= v.y(zt) + 1.0 - 6.5] or gaps   # cách tag lưới >= 6.5 mm
-    z19 = gaps[0]
+    z19 = gaps[min(1, len(gaps) - 1)]                 # dời xuống thêm 1 khoảng đai cho thoáng
     y19 = v.y(z19)
     co([(v.x(px - xi), y19), (v.x(px + xi), y19)], xp, y19, -1, 19, f"{int(p['RC_N'])}%%C{ni(p['RC_D'])}",
        mode=True)
-    if len(gaps) > 3:
-        z20 = gaps[3]
+    if len(gaps) > 4:
+        z20 = gaps[4]
         sel = [z for z in hz if z < z20][:3]
         co([v.P(px - 0.55 * xi, z) for z in sel], xp, v.y(z20), -1, 20, phi(p["RT_D"], p["RT_S"]), mode=True)
     if nl:
@@ -487,11 +509,12 @@ def half_bb(c: Ctx, g: Geo, co: Callouts, xax, ytop):
            phi(p["TL_D"], p["TL_S"]), mode=True)
     # kích thước
     yd = v.y(-tl) - 5.0
-    v.dimH((-L, 0.0), (px - bb / 2, 0.0), yd)
-    v.dimH((px - bb / 2, 0.0), (px + bb / 2, 0.0), yd)
-    v.dimH((px + bb / 2, 0.0), (0.0, 0.0), yd)
-    xd = v.x(-L - ml) - 4.0
-    v.dimV((-L, 0.0), (-L, hd), v.x(-L) - 3.5)
+    # điểm đo đặt ở đáy lót -> đường gióng có khe hở với bê tông lót
+    v.dimH((-L, -tl), (px - bb / 2, -tl), yd)
+    v.dimH((px - bb / 2, -tl), (px + bb / 2, -tl), yd)
+    v.dimH((px + bb / 2, -tl), (0.0, -tl), yd)
+    xd = v.x(-L - ml) - 4.0                         # kích thước lót và chiều cao dầm thẳng hàng
+    v.dimV((-L - ml, 0.0), (-L - ml, hd), xd)
     v.dimV((-L - ml, -tl), (-L - ml, 0.0), xd)
     sc_title(c, v.x(-L / 2), yd - 10.0, "1/2 MẶT CẮT B-B", den)
     return yd - 16.0

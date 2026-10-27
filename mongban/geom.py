@@ -184,7 +184,7 @@ class Geo:
                 for j in order[:left]:
                     fl[j] = True
                 left = 0
-            zb = self.covb + dt + d / 2 + i * (d + gap)
+            zb = self.covb + max(dt, 2 * self.ds) + d / 2 + i * (d + gap)   # lớp dưới nằm trên 2 lớp thép bản
             zt = self.hd - cov - dt - d / 2 - i * (d + gap)
             rows_b.append((zb, list(zip(us, fl))))
             rows_t.append((zt, list(zip(us, fl))))

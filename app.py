@@ -17,6 +17,7 @@ from mongban import _meta, cad, export, frame, kl_excel, model
 
 APP_NAME = "VE_MONGBANCOSUON"
 APP_VER = "1.0.0"
+APP_DESC = "Móng bản có dầm, thường dùng cho móng cột đường dây cao thế bằng thép hình."
 
 
 def settings_path():
@@ -214,7 +215,7 @@ class App(tk.Tk):
         tt.pack(side="left", pady=4)
         tk.Label(tt, text=APP_NAME, background=C["navy"], foreground="#FFFFFF",
                  font=(f[0], f[1] + 5, "bold")).pack(anchor="w")
-        tk.Label(tt, text="Vẽ móng bản có sườn  •  Excel → PDF / AutoCAD DXF / Excel khối lượng",
+        tk.Label(tt, text=f"{APP_DESC}  •  Excel → PDF / AutoCAD DXF / Excel khối lượng",
                  background=C["navy"], foreground="#A9C7EA", font=(f[0], f[1] - 1)).pack(anchor="w")
         tk.Label(hdr, text=f"phiên bản {APP_VER}", background=C["navy"], foreground="#7FA3CC",
                  font=(f[0], f[1] - 1)).pack(side="right", padx=14)
@@ -317,7 +318,7 @@ class App(tk.Tk):
                             font=(f[0], f[1] - 1, "bold"), padx=10, pady=3)
         self._cr.pack(side="left")
         tk.Frame(st, background="#3E5C82", width=1).pack(side="left", fill="y", pady=3)
-        self.l_msg = tk.Label(st, text="", background=C["navy"], foreground="#E3ECF7", anchor="w",
+        self.l_msg = tk.Label(st, text=APP_DESC, background=C["navy"], foreground="#E3ECF7", anchor="w",
                               font=(f[0], f[1] - 1), padx=10, pady=3)
         self.l_msg.pack(side="left", fill="x")
 

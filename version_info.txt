@@ -5,7 +5,7 @@ VSVersionInfo(
   kids=[
     StringFileInfo([StringTable('042A04B0', [
       StringStruct('CompanyName', 'Nguyễn Công Bằng'),
-      StringStruct('FileDescription', 'VE_MONGBANCOSUON - Vẽ móng bản có sườn'),
+      StringStruct('FileDescription', 'VE_MONGBANCOSUON - Móng bản có dầm, thường dùng cho móng cột đường dây cao thế bằng thép hình.'),
       StringStruct('FileVersion', '1.0.0'),
       StringStruct('InternalName', 'VE_MONGBANCOSUON'),
       StringStruct('LegalCopyright', '© Nguyễn Công Bằng. Tác giả: Nguyễn Công Bằng'),
