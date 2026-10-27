@@ -81,4 +81,6 @@ if __name__ == "__main__":
     except BaseException:
         log(traceback.format_exc())
         LOG.close()
+        txt = open(os.path.join(OUT, "log.txt"), encoding="utf-8").read()[-6000:]
+        print("::error title=ui_smoke::" + txt.replace("%", "%25").replace("\r", "").replace("\n", "%0A"))
         sys.exit(1)
