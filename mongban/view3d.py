@@ -170,10 +170,12 @@ class Scene:
                     st += 0.03                           # lệch khỏi đai chính cho dễ nhìn
                     for z in list(g.z_gia):
                         self.L("dai", COL["tie"], dp, [P(st, -uo, z), P(st, uo, z)])
-                    for z in g.z_tie2(along_y):
-                        self.L("dai", COL["tie"], dp, [P(st, -uo, z), P(st, uo, z)])
                     if g.has_vtie():
                         self.L("dai", COL["tie"], dp, [P(st, 0.0, zb), P(st, 0.0, zt)])
+                for st in g.ties2(along_y):              # giữ lớp 2: chỉ trong đoạn có thép lớp 2
+                    st += 0.03
+                    for z in g.z_tie2(along_y):
+                        self.L("dai", COL["tie"], dp, [P(st, -uo, z), P(st, uo, z)])
         # thanh chống (6): thân đứng giữa 2 lớp thép bản, 2 chân ngang
         dch = g.g("RCH_D") / 1000.0
         from .geom import CH_LEG, ANCHOR, TL_LEG, TL_W, TL_OUT

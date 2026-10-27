@@ -163,27 +163,20 @@ class Geo:
         self.n_full = n // 2 if n % 4 == 0 else n // 2 + 1
         self.n_full = min(n, self.n_full)
         self.n_cut = n - self.n_full
-        gap = max(0.025, d)
+        gap = max(0.025, d)                      # khoảng hở giữa các hàng (theo phương đứng)
+        hgap = max(model.GAP_MIN, d)             # khoảng hở ngang tối thiểu 40 mm -> không đủ thì thêm hàng
         w_in = a - 2 * cov - 2 * dt
-        m = max(2, int((w_in + gap + 1e-9) / (d + gap)))
+        m = max(2, int((w_in + hgap + 1e-9) / (d + hgap)))
         nrow = max(1, ceil_(n / m))
         per = [ceil_(n / nrow)] * nrow
         per[-1] = n - sum(per[:-1])
         self.rib_gap = gap
         um = w_in / 2 - d / 2
         rows_b, rows_t = [], []
-        left = self.n_full
+        uss = [[0.0] if cnt == 1 else [-um + j * 2 * um / (cnt - 1) for j in range(cnt)] for cnt in per]
+        fls = self._full_flags(n, per, uss)
         for i, cnt in enumerate(per):
-            us = [0.0] if cnt == 1 else [-um + j * 2 * um / (cnt - 1) for j in range(cnt)]
-            fl = [False] * cnt
-            if left >= cnt:
-                fl = [True] * cnt
-                left -= cnt
-            else:   # thanh dài suốt đặt ở 2 đầu hàng, đối xứng
-                order = sorted(range(cnt), key=lambda j: -abs(us[j]))
-                for j in order[:left]:
-                    fl[j] = True
-                left = 0
+            us, fl = uss[i], fls[i]
             zb = self.covb + max(dt, 2 * self.ds) + d / 2 + i * (d + gap)   # lớp dưới nằm trên 2 lớp thép bản
             zt = self.hd - cov - dt - d / 2 - i * (d + gap)
             rows_b.append((zb, list(zip(us, fl))))
@@ -198,6 +191,36 @@ class Geo:
         # đoạn cắt bớt mỗi đầu thanh ngắt = 1/2 khoảng từ mép dầm ngang tới mép móng (theo dầm đang cắt), làm tròn lên 100
         self.cut_y = math.ceil(self.D2 / 2 / 0.1 - 1e-6) * 0.1
         self.cut_x = math.ceil(self.D1 / 2 / 0.1 - 1e-6) * 0.1
+
+    def _full_flags(self, n, per, uss):
+        """Thanh dài suốt (True) / thanh ngắt (False) theo từng hàng.
+        < 10 thanh: lấp đầy thanh dài suốt từ hàng ngoài cùng, hàng còn thiếu đặt thanh dài suốt ở 2 đầu.
+        >= 10 thanh (nhiều hàng): cắt so le - thanh góc luôn dài suốt, thanh ngắt ở các cột trong xen kẽ
+        (cột 2, 4, ...) giống nhau ở mọi hàng; thừa / thiếu thì ưu tiên cột gần tim dầm."""
+        fls = [[True] * c for c in per]
+        need = self.n_cut
+        if n >= 10 and len(per) > 1:
+            cand = []                                  # (ưu tiên, hàng, cột)
+            for i, us in enumerate(uss):
+                for j in range(1, len(us) - 1):
+                    cand.append((0 if j % 2 == 1 else 1, round(abs(us[j]), 6), i, j))
+            cand.sort()
+            for _, _, i, j in cand[:need]:
+                fls[i][j] = False
+            return fls
+        left = self.n_full
+        for i, cnt in enumerate(per):
+            fl = [False] * cnt
+            if left >= cnt:
+                fl = [True] * cnt
+                left -= cnt
+            else:   # thanh dài suốt đặt ở 2 đầu hàng, đối xứng
+                order = sorted(range(cnt), key=lambda j: -abs(uss[i][j]))
+                for j in order[:left]:
+                    fl[j] = True
+                left = 0
+            fls[i] = fl
+        return fls
 
     def rib_len(self, along_y):
         span = self.g("B") if along_y else self.g("L")
@@ -224,6 +247,28 @@ class Geo:
             return []
         dz = self.dm / 2 + 0.004
         return [self.rows_bot(along_y)[1][0] - dz, self.rows_t[1][0] - dz]
+
+    def tie2_full(self):
+        """Đai phụ giữ lớp 2 rải suốt dầm khi thanh biên lớp 2 là thanh dài suốt; ngược lại chỉ trong đoạn thanh ngắt."""
+        return self.has_tie2() and all(f for u, f in self.rows_b[1][1] if abs(abs(u) - self.u_edge2()) < 1e-6)
+
+    def u_edge2(self):
+        return max(abs(u) for u, _ in self.rows_b[1][1]) if self.has_tie2() else 0.0
+
+    def ties2(self, along_y):
+        """Vị trí đai phụ giữ lớp 2 dọc dầm (mỗi mặt trên / dưới)."""
+        if not self.has_tie2():
+            return []
+        if self.tie2_full():
+            return self.ties(along_y)
+        h = self.rib_len(along_y)[1] / 2
+        s = self.g("RDP_S") / 1000.0
+        out = []
+        for a0, a1 in self.rib_segments(along_y):
+            a0, a1 = max(a0, -h), min(a1, h)
+            if a1 - a0 > 1e-6:
+                out += stations(a0, a1, s)
+        return out
 
     def u_tie2(self):
         """Nửa chiều dài đai phụ giữ lớp 2 (móc ôm 2 thanh biên của lớp 2)."""
@@ -404,9 +449,9 @@ class Geo:
         ns = 2 * (len(self.stirrups(True)) + len(self.stirrups(False)))
         R(16, g("RDT_D"), 2 * w + 2 * hh + 2 * HOOK, ns, [1000 * HOOK, 1000 * w, 1000 * hh], "Đai dầm")
         nt = 2 * (len(self.ties(True)) + len(self.ties(False)))
-        # đai phụ ngang: tại mỗi mức thép giá + giữ lớp thép 2 (mặt trên, mặt dưới) khi thép chủ 2 lớp
-        nlev = self.n_gia + (2 if self.has_tie2() else 0)
-        R(17, g("RDP_D"), w + 2 * HOOK, nt * nlev, [1000 * HOOK, 1000 * w, 1000 * HOOK], "Đai phụ ngang dầm")
+        # đai phụ ngang: tại mỗi mức thép giá + giữ lớp thép 2 (mặt trên, mặt dưới; chỉ trong đoạn có thép lớp 2)
+        n17 = nt * self.n_gia + 2 * 2 * (len(self.ties2(True)) + len(self.ties2(False)))
+        R(17, g("RDP_D"), w + 2 * HOOK, n17, [1000 * HOOK, 1000 * w, 1000 * HOOK], "Đai phụ ngang dầm")
         if self.has_vtie():
             R(18, g("RDP_D"), hh + 2 * HOOK, nt, [1000 * HOOK, 1000 * hh, 1000 * HOOK], "Đai phụ đứng dầm")
         # 19-23: cổ móng

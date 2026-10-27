@@ -275,6 +275,30 @@ def validate(p) -> str | None:
     return None
 
 
+GAP_MIN = 0.04      # khoảng hở ngang tối thiểu giữa các thanh thép chủ (m)
+
+
+def warnings(p) -> list:
+    """Cảnh báo (không chặn dựng bản vẽ): khoảng hở ngang giữa các thanh thép chủ < 40 mm."""
+    out = []
+    try:
+        m = 1 + int(round(p["RC_N"])) // 4
+        d = p["RC_D"] / 1000.0
+        xi = p["BB"] / 2 - p["COVER"] - d / 2
+        if m > 1:
+            gap = 2 * xi / (m - 1) - d
+            if gap < GAP_MIN - 1e-9:
+                out.append(f"Khoảng hở thép chủ cổ móng {gap * 1000:.0f} mm < {GAP_MIN * 1000:.0f} mm.")
+        d = p["RD_D"] / 1000.0
+        w_in = p["A"] - 2 * p["COVER"] - 2 * p["RDT_D"] / 1000.0
+        if p["RD_N"] >= 2 and w_in - 2 * d < GAP_MIN - 1e-9:
+            out.append(f"Dầm rộng {p['A'] * 1000:.0f} mm không đặt được 2 thanh Ø{p['RD_D']:.0f} "
+                       f"với khoảng hở >= {GAP_MIN * 1000:.0f} mm.")
+    except (KeyError, TypeError, ValueError, ZeroDivisionError):
+        pass
+    return out
+
+
 def auto_scale(p) -> int:
     """Tỷ lệ mặt cắt A-A và mặt bằng (tờ 1)."""
     wx = p["L"] + 2 * p["MPIT"] + 2 * SLOPE_DRAW * pit_depth(p)

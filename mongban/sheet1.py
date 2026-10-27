@@ -395,7 +395,10 @@ def dim_plan(c: Ctx, g: Geo, v: V):
         qx, qy = -g.dx, -g.dy
         xa = qx + a / 2
         v.dimH((xa, qy + a / 2), (xa + g.e, qy + a / 2), v.y(qy + a / 2 + g.e) + 2.5)
-        v.dimV((xa, qy + a / 2), (xa, qy + a / 2 + g.e), v.x(xa + g.e) + 2.5)        # cạnh vát phương còn lại
+        # cạnh vát phương còn lại: gióng từ x = mút vát -> không chồng lên gióng của kích thước ngang
+        xdv = v.x(xa + g.e) + 2.5
+        v.dimV((xa + g.e, qy + a / 2), (xa + g.e, qy + a / 2 + g.e), xdv,
+               (xdv + 2.2, v.y(qy + a / 2 + g.e / 2)))         # chữ bên phải, không đè nét vát
     if g.hasHole:
         h = g.c / 2
         ml_ = model.ML if h > model.ML else 0.0

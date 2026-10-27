@@ -249,6 +249,12 @@ def tick45(c: Ctx, x, y, fixed=False):
     c.pl("CHU", False, [(x - 0.48, y - 0.48), (x + 0.48, y + 0.48)], width=0.12, fixed=(0, 1) if fixed else ())
 
 
+def tick_at(c: Ctx, x, y, ang, fixed=False):
+    """Nét xẹt nghiêng góc ang (độ) - dùng khi nét 45° cố định bị trùng thanh thép xiên."""
+    dx, dy = 0.68 * math.cos(math.radians(ang)), 0.68 * math.sin(math.radians(ang))
+    c.pl("CHU", False, [(x - dx, y - dy), (x + dx, y + dy)], width=0.12, fixed=(0, 1) if fixed else ())
+
+
 def balloon(c: Ctx, x, y, num):
     c.ci("CHU", x, y, 3.0)
     c.txc("CHU", x, y, 2.4, num)
@@ -280,6 +286,22 @@ class Callouts:
         c.objs.append(a)
         return (x, y)
 
+    def _knee(self, me, ex, by):
+        """Điểm gãy leader (id ...@k): mặc định ở đầu đường tag phía hình, đi theo tag; kéo riêng để chỉnh leader."""
+        c = self.c
+        if me is None:
+            return ex, by
+        from .cad import Obj
+        kid = f"{me.id}@k"
+        d = c.offsets.get(kid)
+        x, y = (ex + d[0], by + d[1]) if d else (ex, by)
+        gx, gy = c.off(True)
+        a = Obj(kid, "anchor", "Điểm gãy leader")
+        a.add(x + gx - 0.9, y + gy - 0.9)
+        a.add(x + gx + 0.9, y + gy + 0.9)
+        c.objs.append(a)
+        return x, y
+
     def _draw(self, targets, bx, by, side, num, txt1, txt2, tick, mode):
         """bx: điểm đầu đường tag (phía hình); tag kéo dài về phía side."""
         c = self.c
@@ -291,15 +313,18 @@ class Callouts:
         c.ln("CHU", ex, by, bx - side * 3.0, by)
         di = c.item_off()
         me = c._stack[-1] if c._stack else None
+        jx, jy = self._knee(me, ex, by)           # điểm gãy (giao leader ngang với nhánh xiên / đứng), kéo được
+        if abs(jx - ex) > 1e-6 or abs(jy - by) > 1e-6:
+            c.ln("CHU", ex, by, jx, jy)
         for i, tp in enumerate(targets):
             tp = self._anchor(me, i, tp)
             if mode:
                 xt = tp[0] - di[0]                 # đoạn đứng luôn đi qua đúng thanh thép
-                c.ln("CHU", ex, by, xt, by)
-                if abs(by + di[1] - tp[1]) > 0.01:
-                    c.ln("CHU", xt, by, tp[0], tp[1], fixed2=True)
+                c.ln("CHU", jx, jy, xt, jy)
+                if abs(jy + di[1] - tp[1]) > 0.01:
+                    c.ln("CHU", xt, jy, tp[0], tp[1], fixed2=True)
             else:
-                c.ln("CHU", ex, by, tp[0], tp[1], fixed2=True)
+                c.ln("CHU", jx, jy, tp[0], tp[1], fixed2=True)
             if tick:
                 tick45(c, tp[0], tp[1], fixed=True)
         c.txj("CHU", tx, by + 0.8, 2.0, txt1, 2 if side > 0 else 0)

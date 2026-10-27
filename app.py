@@ -321,7 +321,10 @@ class App(tk.Tk):
         self.pv.bind("<B1-Motion>", self._motion)
         self.pv.bind("<ButtonRelease-1>", self._release)
         self.pv.bind("<ButtonPress-2>", lambda e: self.pv.scan_mark(e.x, e.y))
-        self.pv.bind("<B2-Motion>", lambda e: self.pv.scan_dragto(e.x, e.y, gain=1))
+        self.pv.bind("<B2-Motion>", lambda e: (self.pv.scan_dragto(e.x, e.y, gain=1),
+                                              None if self._view_covered() else self._paint(fast=True)))
+        self.pv.bind("<ButtonRelease-2>", lambda e: self._paint_later(60))
+        self.bind("<Escape>", lambda e: (setattr(self, "_sel", []), self._overlay()))
         self.pv.bind("<ButtonPress-3>", self._context)
         self.pv.bind("<Motion>", self._hover)
 
@@ -488,7 +491,8 @@ class App(tk.Tk):
             self.l_err.config(text="[!] Có ô nhập không phải số.")
             return None
         err = model.validate(p)
-        self.l_err.config(text=f"[!] {err}" if err else "")
+        warn = [] if err else model.warnings(p)
+        self.l_err.config(text=f"[!] {err}" if err else ("".join(f"[Cảnh báo] {w}\n" for w in warn).strip()))
         if not err:
             self.l_info.config(text=f"Loại móng: {model.type_name(p)}")
         return None if err else p
@@ -690,48 +694,110 @@ class App(tk.Tk):
         self._redraw()
 
     def zoom_by(self, f, e=None):
-        """Phóng to / thu nhỏ; có sự kiện chuột thì giữ nguyên điểm bản vẽ dưới con trỏ."""
+        """Phóng to / thu nhỏ; có sự kiện chuột thì giữ nguyên điểm bản vẽ dưới con trỏ.
+        Vẽ nhanh (nội suy thô) ngay, vẽ nét đẹp sau khi ngừng lăn chuột."""
         if not self.pages:
             return
         old = self._geom
         if e is not None and old:
             ex, ey = e.x_root - self.pv.winfo_rootx(), e.y_root - self.pv.winfo_rooty()
             cx, cy = self.pv.canvasx(ex), self.pv.canvasy(ey)
-            ow, oh = self._zimg.width, self._zimg.height
+            ow, oh = self._zs[1], self._zs[2]
             fu, fv = (cx - old[0]) / ow, (cy - old[1]) / oh
         self.zoom = min(4.0, max(0.1, (self.zoom or self._fit_zoom()) * f))
-        self._redraw()
+        self._redraw(paint=False)
         if e is not None and old and self._geom:
             x0, y0, _ = self._geom
-            nw, nh = self._zimg.width, self._zimg.height
+            nw, nh = self._zs[1], self._zs[2]
             sw = max(self.pv.winfo_width(), nw + 20)
             sh = max(self.pv.winfo_height(), nh + 20)
             self.pv.xview_moveto(max(0.0, (x0 + fu * nw - ex) / sw))
             self.pv.yview_moveto(max(0.0, (y0 + fv * nh - ey) / sh))
+        self._paint(fast=True)
+        self._paint_later()
+
+    def _paint_later(self, ms=180):
+        if getattr(self, "_pjob", None):
+            self.after_cancel(self._pjob)
+        self._pjob = self.after(ms, self._paint)
 
     def _fit_zoom(self):
         im = self.pages[self.page_i]
         w, h = max(50, self.pv.winfo_width() - 20), max(50, self.pv.winfo_height() - 20)
         return min(w / im.width, h / im.height)
 
-    def _redraw(self):
-        from PIL import ImageTk
+    def _redraw(self, paint=True):
+        """Bố trí trang trên khung xem (kích thước ảo theo zoom); chỉ dựng ảnh phần đang thấy (_paint)."""
         if not self.pages:
             return
         im = self.pages[self.page_i]
         z = self.zoom or self._fit_zoom()
         w, h = max(1, int(im.width * z)), max(1, int(im.height * z))
-        self._zimg = im.resize((w, h), resample=3)
-        self._tkimg = ImageTk.PhotoImage(self._zimg)
         self.pv.delete("all")
         cw, ch = self.pv.winfo_width(), self.pv.winfo_height()
         x0 = max(10, (cw - w) // 2)
         y0 = max(10, (ch - h) // 2)
-        self.pv.create_rectangle(x0 + 4, y0 + 4, x0 + w + 4, y0 + h + 4, fill="#232E3A", outline="")
-        self.pv.create_image(x0, y0, image=self._tkimg, anchor="nw")
+        self.pv.create_rectangle(x0 + 4, y0 + 4, x0 + w + 4, y0 + h + 4, fill="#232E3A", outline="", tags="bg")
+        self.pv.create_rectangle(x0, y0, x0 + w, y0 + h, fill="#FFFFFF", outline="", tags="bg")
         self.pv.configure(scrollregion=(0, 0, max(cw, w + 20), max(ch, h + 20)))
         self._geom = (x0, y0, w / export.PAGE_W)
+        self._zs = (z, w, h)
+        self._painted = None
+        if paint:
+            self._paint()
         self._overlay()
+
+    def _paint(self, fast=False):
+        """Dựng ảnh vùng nhìn thấy (+ lề nửa khung mỗi phía để kéo không bị trống)."""
+        from PIL import Image, ImageTk
+        self._pjob = None
+        if not self.pages or not self._geom:
+            return
+        im = self.pages[self.page_i]
+        x0, y0, _ = self._geom
+        z, w, h = self._zs
+        cw, ch = self.pv.winfo_width(), self.pv.winfo_height()
+        vx, vy = self.pv.canvasx(0), self.pv.canvasy(0)
+        rx0, ry0 = max(x0, int(vx - cw / 2)), max(y0, int(vy - ch / 2))
+        rx1, ry1 = min(x0 + w, int(vx + 1.5 * cw)), min(y0 + h, int(vy + 1.5 * ch))
+        if rx1 - rx0 < 1 or ry1 - ry0 < 1:
+            return
+        box = ((rx0 - x0) / z, (ry0 - y0) / z, min(im.width, (rx1 - x0) / z), min(im.height, (ry1 - y0) / z))
+        self._zimg = im.resize((rx1 - rx0, ry1 - ry0), Image.BILINEAR if fast else Image.BICUBIC, box=box)
+        self._zorg = (rx0, ry0)
+        self._tkimg = ImageTk.PhotoImage(self._zimg)
+        self.pv.delete("pg")
+        self.pv.create_image(rx0, ry0, image=self._tkimg, anchor="nw", tags="pg")
+        self.pv.tag_raise("pg", "bg")
+        self.pv.tag_raise("ov")
+        self._painted = (rx0, ry0, rx1, ry1)
+
+    def _view_covered(self):
+        p = getattr(self, "_painted", None)
+        if not p:
+            return False
+        vx, vy = self.pv.canvasx(0), self.pv.canvasy(0)
+        cw, ch = self.pv.winfo_width(), self.pv.winfo_height()
+        x0, y0, _ = self._geom
+        z, w, h = self._zs
+        return (p[0] <= max(vx, x0) and p[1] <= max(vy, y0) and p[2] >= min(vx + cw, x0 + w)
+                and p[3] >= min(vy + ch, y0 + h))
+
+    def _zcrop(self, x1, y1, x2, y2):
+        """Ảnh trang (đã zoom) trong khung toạ độ canvas, lấy thẳng từ ảnh gốc (nền trắng ngoài trang)."""
+        from PIL import Image
+        im = self.pages[self.page_i]
+        gx, gy, _ = self._geom
+        z = self._zs[0]
+        out = Image.new("RGB", (max(1, int(x2 - x1)), max(1, int(y2 - y1))), "white")
+        sx0, sy0 = max(0.0, (x1 - gx) / z), max(0.0, (y1 - gy) / z)
+        sx1, sy1 = min(im.width, (x2 - gx) / z), min(im.height, (y2 - gy) / z)
+        if sx1 > sx0 and sy1 > sy0:
+            px0, py0 = int(gx + sx0 * z - x1), int(gy + sy0 * z - y1)
+            part = im.resize((max(1, int((sx1 - sx0) * z)), max(1, int((sy1 - sy0) * z))), Image.BILINEAR,
+                             box=(sx0, sy0, sx1, sy1))
+            out.paste(part, (px0, py0))
+        return out
 
     # ------------------------------------------------------------ sắp xếp
     def _objs(self):
@@ -760,9 +826,17 @@ class App(tk.Tk):
         self.pv.delete("ov")
         if not self._geom:
             return
+        sel = set(getattr(self, "_sel", []))
         for o in self._objs():
             x1, y1, x2, y2 = self._box_px(o)
             moved = any(o.id == k or o.id.startswith(k + ".") for k in self.pending)
+            if o.id in sel and len(sel) > 1:
+                self.pv.create_rectangle(x1 - 3, y1 - 3, x2 + 3, y2 + 3, outline="#6A1B9A", width=2, tags="ov")
+                continue
+            if o.kind == "anchor" and o.id.endswith("@k"):        # điểm gãy leader
+                cx_, cy_ = (x1 + x2) / 2, (y1 + y2) / 2
+                self.pv.create_rectangle(cx_ - 3, cy_ - 3, cx_ + 3, cy_ + 3, outline="#1565c0", width=2, tags="ov")
+                continue
             if o.kind == "group":
                 self.pv.create_rectangle(x1 - 3, y1 - 3, x2 + 3, y2 + 3, outline="#1565c0", dash=(6, 3), tags="ov")
             elif o.kind == "anchor":
@@ -795,7 +869,8 @@ class App(tk.Tk):
         if not self.v_arr.get():
             return
         o = self._pick(e)
-        self.l_state.config(text=f"{o.label or o.id}  (kéo để dịch chuyển, chuột phải để trả về mặc định)" if o else "")
+        self.l_state.config(text=f"{o.label or o.id}  (kéo để dịch chuyển, Ctrl+nhấp: chọn nhiều, "
+                                 f"chuột phải: về mặc định)" if o else "")
 
     def _press(self, e):
         if not self.v_arr.get():
@@ -804,44 +879,63 @@ class App(tk.Tk):
             return
         o = self._pick(e)
         self._dlast = (0.0, 0.0)
+        sel = getattr(self, "_sel", [])
+        if e.state & 0x0004:                      # Ctrl + nhấp: thêm / bớt khỏi nhóm chọn
+            if o is not None:
+                self._sel = [i for i in sel if i != o.id] if o.id in sel else sel + [o.id]
+            self._drag = None
+            self._overlay()
+            return
         if o is None:
             self._drag = None
+            if sel:
+                self._sel = []
+                self._overlay()
             return
-        x1, y1, x2, y2 = self._box_px(o)
+        if o.id in sel and len(sel) > 1:
+            objs = [ob for ob in self._objs() if ob.id in sel]
+        else:
+            self._sel = [o.id]
+            objs = [o]
         items = []
-        if o.kind != "anchor" and getattr(self, "_zimg", None) is not None:
-            # phần hình của đối tượng đi theo chuột -> thấy kết quả ngay khi kéo
-            from PIL import ImageTk
-            gx, gy, _ = self._geom
-            bx = (int(x1 - gx) - 2, int(y1 - gy) - 2, int(x2 - gx) + 3, int(y2 - gy) + 3)
-            self._dragimg = ImageTk.PhotoImage(self._zimg.crop(bx))
-            items.append(self.pv.create_rectangle(x1 - 2, y1 - 2, x2 + 3, y2 + 3, fill="white", outline="", tags="ov"))
-            items.append(self.pv.create_image(x1 - 2, y1 - 2, image=self._dragimg, anchor="nw", tags="ov"))
-        r = self.pv.create_rectangle(x1, y1, x2, y2, outline="#d32f2f", width=2, dash=(4, 2), tags="ov")
-        items.append(r)
-        self._drag = (o, self.pv.canvasx(e.x), self.pv.canvasy(e.y), items, (x1, y1, x2, y2))
+        from PIL import ImageTk
+        self._dragimgs = []
+        for ob in objs:
+            x1, y1, x2, y2 = self._box_px(ob)
+            if ob.kind != "anchor":
+                # phần hình của đối tượng đi theo chuột -> thấy kết quả ngay khi kéo
+                tki = ImageTk.PhotoImage(self._zcrop(x1 - 2, y1 - 2, x2 + 3, y2 + 3))
+                self._dragimgs.append(tki)
+                self.pv.create_rectangle(x1 - 2, y1 - 2, x2 + 3, y2 + 3, fill="white", outline="", tags="ov")
+                items.append(self.pv.create_image(x1 - 2, y1 - 2, image=tki, anchor="nw", tags="ov"))
+            items.append(self.pv.create_rectangle(x1, y1, x2, y2, outline="#d32f2f", width=2, dash=(4, 2),
+                                                  tags="ov"))
+        self._drag = (objs, self.pv.canvasx(e.x), self.pv.canvasy(e.y), items)
 
     def _motion(self, e):
         if self._drag == "pan":
             self.pv.scan_dragto(e.x, e.y, gain=1)
+            if not self._view_covered():
+                self._paint(fast=True)
             return
         if not self._drag:
             return
-        o, sx, sy, items, _ = self._drag
+        objs, sx, sy, items = self._drag
         dx, dy = self.pv.canvasx(e.x) - sx, self.pv.canvasy(e.y) - sy
         last = getattr(self, "_dlast", (0.0, 0.0))
-        for it in items[1:]:                          # nền trắng (items[0]) đứng yên che chỗ cũ
+        for it in items:                          # nền trắng (không có trong items) đứng yên che chỗ cũ
             self.pv.move(it, dx - last[0], dy - last[1])
-        if len(items) == 1:
-            self.pv.move(items[0], dx - last[0], dy - last[1])
         self._dlast = (dx, dy)
 
     def _release(self, e):
         d = self._drag
         self._drag = None
-        if not d or d == "pan":
+        if d == "pan":
+            self._paint_later(60)
             return
-        o, sx, sy, items, _ = d
+        if not d:
+            return
+        objs, sx, sy, items = d
         self._dlast = (0.0, 0.0)
         s = self._geom[2]
         dx = (self.pv.canvasx(e.x) - sx) / s
@@ -849,7 +943,10 @@ class App(tk.Tk):
         if abs(dx) < 0.2 and abs(dy) < 0.2:
             self._overlay()
             return
-        self._move(o.id, dx, dy)
+        ids = [o.id for o in objs]
+        # bỏ đối tượng con khi đã chọn cả đối tượng cha (tránh dịch 2 lần)
+        ids = [i for i in ids if not any(i != j and (i.startswith(j + ".") or i.startswith(j + "@")) for j in ids)]
+        self._move_many(ids, dx, dy)
 
     def _snap(self):
         """Lưu trạng thái sắp xếp trước khi thay đổi (cho Ctrl+Z)."""
@@ -872,11 +969,15 @@ class App(tk.Tk):
         self.preview()
 
     def _move(self, oid, dx, dy):
-        self._snap()
-        cur = self.offsets.get(oid, [0.0, 0.0])
-        self.offsets[oid] = [round(cur[0] + dx, 2), round(cur[1] + dy, 2)]
-        pd = self.pending.get(oid, [0.0, 0.0])
-        self.pending[oid] = [pd[0] + dx, pd[1] + dy]
+        self._move_many([oid], dx, dy)
+
+    def _move_many(self, ids, dx, dy):
+        self._snap()                               # 1 lần hoàn tác cho cả nhóm
+        for oid in ids:
+            cur = self.offsets.get(oid, [0.0, 0.0])
+            self.offsets[oid] = [round(cur[0] + dx, 2), round(cur[1] + dy, 2)]
+            pd = self.pending.get(oid, [0.0, 0.0])
+            self.pending[oid] = [pd[0] + dx, pd[1] + dy]
         self._layout_changed()
 
     def _layout_changed(self):

@@ -7,7 +7,7 @@ import math
 from . import model, tables
 from .cad import Ctx
 from .geom import ANCHOR, TL_LEG, TL_OUT, TL_W, Geo, ceil_
-from .view import V, Callouts, brk, cut_line, dai_draw, note_at, ni, phi, rpl, sym, tick45, tie, title
+from .view import V, Callouts, brk, cut_line, dai_draw, note_at, ni, phi, rpl, sym, tick_at, tie, title
 
 T_MESHH = "LƯỚI THÉP ĐẦU TRỤ"
 W_SLAB = 0.75          # bản móng thể hiện mỗi bên dầm trong mặt cắt 1-1, 2-2 (m)
@@ -105,10 +105,15 @@ def rib_section(c: Ctx, g: Geo, co: Callouts, ox, oy, along_y: bool, name: str):
     xr = v.x(ur) + 2.0
     xl = v.x(ul) - 2.0
     dmm = ni(p["RD_D"])
-    rt0 = g.rows_t[0]
-    full = [u for u, f in rt0[1] if f]
-    co([v.P(u, rt0[0]) for u in full], v.x(-a / 2) - 1.0, v.y(hd) + 6.0, -1, pf, f"{len(full)}%%C{dmm}",
-       tick=False, mode=True)
+    # thanh dài suốt mặt trên (mọi hàng; cắt so le thì có ở cả hàng 2) - gióng từ trên xuống tới thanh thấp nhất
+    fcol = {}
+    for z, row in g.rows_t:
+        for u, f in row:
+            if f:
+                fcol[round(u, 6)] = min(z, fcol.get(round(u, 6), z))
+    nfull = sum(1 for _, row in g.rows_t for _, f in row if f)
+    co([v.P(u, z) for u, z in sorted(fcol.items())], v.x(-a / 2) - 1.0, v.y(hd) + 6.0, -1, pf,
+       f"{nfull}%%C{dmm}", tick=False, mode=True)
     v.dimH((-a / 2, hd), (a / 2, hd), v.y(hd) + 11.5)
     # bên phải, từ trên xuống: tag đặt sát dầm, trên phần bản móng nếu đủ chỗ
     xin = v.x(a / 2) + 2.0
@@ -119,7 +124,7 @@ def rib_section(c: Ctx, g: Geo, co: Callouts, ox, oy, along_y: bool, name: str):
     yprev = v.y(hd) + 2.0
     cut = [(u, z) for z, row in g.rows_t for u, f in row if not f]
     if cut:                      # thanh ngắt lớp 2: gióng từ dưới lên
-        by = v.y(cut[0][1]) - 2.5
+        by = v.y(min(z for _, z in cut)) - 2.5
         co([v.P(u, z) for u, z in cut], ex_r(by), by, 1, pc, f"{len(cut)}%%C{dmm}", tick=False, mode=True)
         yprev = by
     by = yprev - 6.0
@@ -279,13 +284,14 @@ def haunch_plan(c: Ctx, g: Geo, co: Callouts, ox, oy):
     for (nx, ny, ux, uy, ts), yt in zip(fams, (0.35 * R, -0.5 * R)):
         o = 0.5 * (ts[-1] + ts[-2]) if len(ts) > 1 else 0.25 * l8   # đặt ở khe giữa 2 thanh họ kia (không trùng nét)
         o = o * (1 if ny > 0 else -1)
-        p1 = (nx * (ts[0] - 0.08) + ux * o, ny * (ts[0] - 0.08) + uy * o)
-        p2 = (nx * (ts[-1] + 0.08) + ux * o, ny * (ts[-1] + 0.08) + uy * o)
+        p1 = (nx * ts[0] + ux * o, ny * ts[0] + uy * o)      # không có đầu thừa: từ thanh đầu tới thanh cuối
+        p2 = (nx * ts[-1] + ux * o, ny * ts[-1] + uy * o)
+        ang = math.degrees(math.atan2(ny, nx)) + 45.0           # nét xẹt lệch 45° so với đường gióng (không trùng thanh)
         with c.item(f"cross8{int(ny > 0)}", "Đường gióng thép 8"):
             v.ln("CHU", p1[0], p1[1], p2[0], p2[1])
             for t in ts:
                 q = v.P(nx * t + ux * o, ny * t + uy * o)
-                tick45(c, q[0], q[1])
+                tick_at(c, q[0], q[1], ang)
         co([v.P(*p2)], xr, v.y(yt), 1, 8, f"{n8}%%C{ni(p['RDT_D'])}", tick=False)
     v.dimH((-h - e, h), (-h, h), v.y(R) + 3.5)
     v.dimH((-h, h), (h, h), v.y(R) + 3.5)
@@ -422,12 +428,6 @@ def half_bb(c: Ctx, g: Geo, co: Callouts, xax, ytop):
     sts = [s for s in g.stirrups(False) if s <= 1e-9]
     for s in sts:
         v.ln("DAI", s, covb, s, hd - cov)
-    # thép bản theo Y (chấm) chạy dưới đáy dầm
-    zYb, zXb, zYt, zXt = g.slab_z()
-    rs = v.rbar(p["RS_D"])
-    for x in g.xs1:
-        if x < 0:
-            v.disc("COTTHEP", x, zYb, rs)
     # cổ móng: thép chủ 19 (neo chân 500 vào bản), đai 20, lưới 23
     zt = g.H - cov
     zb = covb + 2 * g.ds

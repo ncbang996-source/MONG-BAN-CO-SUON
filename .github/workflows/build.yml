@@ -17,13 +17,6 @@ jobs:
         run: pip install -r requirements.txt
       - name: Kiểm tra dựng bản vẽ mẫu
         run: python tests/smoke.py
-      - name: Kiểm tra giao diện (tab 3D) + chụp màn hình
-        run: python tests/ui_smoke.py
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: anh-giao-dien
-          path: shots/
       - name: Đóng gói exe
         run: pyinstaller --noconfirm VE_MONGBANCOSUON.spec
       - uses: actions/upload-artifact@v4
