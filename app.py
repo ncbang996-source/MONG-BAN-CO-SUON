@@ -423,6 +423,7 @@ class App(tk.Tk):
         ttk.Entry(body, textvariable=self._var("RC_N"), width=5).grid(row=r, column=1, sticky="w")
         ttk.Entry(body, textvariable=self._var("RC_D"), width=6).grid(row=r, column=2, sticky="w")
         r += 1
+        row("Thép chủ dầm nhiều hàng", "RD_ARR", 22, values=model.ARR_NAMES)
         row("Số lớp lưới đầu trụ", "RL_N", 5)
         row("Lớp BT bảo vệ đáy móng (mm)", "COVER_B", 6)
         row("Lớp BT bảo vệ còn lại (mm)", "COVER", 6)
@@ -445,6 +446,8 @@ class App(tk.Tk):
         for k, v in self.vars.items():
             if k == "HT":
                 v.set(["Đỡ", "Néo góc", "Néo dừng"][int(p["HT"])])
+            elif k == "RD_ARR":
+                v.set(model.ARR_NAMES[1 if int(p.get("RD_ARR", 0)) else 0])
             elif k in ("COVER", "COVER_B"):
                 v.set(f"{p[k] * 1000:g}")
             elif k in ("SCALE",):
@@ -464,6 +467,8 @@ class App(tk.Tk):
             s = v.get().strip()
             if k == "HT":
                 p["HT"] = {"đỡ": 0, "néo góc": 1, "néo dừng": 2}.get(s.lower(), model.ht_from_string(s))
+            elif k == "RD_ARR":
+                p["RD_ARR"] = 1.0 if s == model.ARR_NAMES[1] else 0.0
             elif k in ("COVER", "COVER_B"):
                 p[k] = float(s.replace(",", ".")) / 1000.0
             elif k == "SCALE":
@@ -494,7 +499,15 @@ class App(tk.Tk):
         warn = [] if err else model.warnings(p)
         self.l_err.config(text=f"[!] {err}" if err else ("".join(f"[Cảnh báo] {w}\n" for w in warn).strip()))
         if not err:
-            self.l_info.config(text=f"Loại móng: {model.type_name(p)}")
+            info = f"Loại móng: {model.type_name(p)}"
+            try:
+                from mongban.geom import Geo
+                g = Geo(p)
+                g.rib_bars()
+                info += "\nThép chủ dầm mỗi mặt: " + " + ".join(str(len(r)) for _, r in g.rows_t) + " thanh"
+            except Exception:
+                pass
+            self.l_info.config(text=info)
         return None if err else p
 
     def auto_scale(self):

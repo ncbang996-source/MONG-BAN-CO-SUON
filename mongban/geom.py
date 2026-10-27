@@ -167,9 +167,8 @@ class Geo:
         hgap = max(model.GAP_MIN, d)             # khoảng hở ngang tối thiểu 40 mm -> không đủ thì thêm hàng
         w_in = a - 2 * cov - 2 * dt
         m = max(2, int((w_in + hgap + 1e-9) / (d + hgap)))
-        nrow = max(1, ceil_(n / m))
-        per = [ceil_(n / nrow)] * nrow
-        per[-1] = n - sum(per[:-1])
+        per = model.rib_rows(n, m, self.g("RD_ARR") if "RD_ARR" in self.p else 0)
+        self.rib_m = m
         self.rib_gap = gap
         um = w_in / 2 - d / 2
         rows_b, rows_t = [], []
@@ -229,8 +228,9 @@ class Geo:
         return full, max(0.0, span - 2 * (self.cut_y if along_y else self.cut_x))
 
     def has_tie2(self):
-        """Thép chủ dầm 2 lớp -> thêm đai phụ ngang giữ lớp thứ 2 (mặt trên và mặt dưới)."""
-        return len(self.rows_b) > 1
+        """Thép chủ dầm 2 lớp -> thêm đai phụ ngang giữ lớp thứ 2 (mặt trên và mặt dưới).
+        Lớp 2 chỉ 1-2 thanh thì nằm sát 2 nhánh đai chính -> không cần đai phụ."""
+        return len(self.rows_b) > 1 and len(self.rows_b[1][1]) > 2
 
     def drop_b(self, along_y):
         """Hạ thép chủ đáy dầm xuống tựa ngay trên lớp thép bản vuông góc với dầm (ngang cao độ thanh thép bản

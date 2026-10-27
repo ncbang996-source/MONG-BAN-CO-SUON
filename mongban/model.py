@@ -60,6 +60,7 @@ def default_params() -> dict:
         "RL_D": 8.0, "RL_S": 100.0, "RL_N": 2.0,
         "RD_D": 25.0, "RD_N": 8.0, "RDT_D": 8.0, "RDT_S": 200.0, "RDP_D": 8.0, "RDP_S": 400.0,
         "TL_D": 25.0, "TL_S": 300.0,
+        "RD_ARR": 0.0,      # thép chủ dầm nhiều hàng (hàng dưới > 2 thanh): 0 = các hàng đều nhau, 1 = xếp đầy hàng ngoài
         "COVER": 0.075, "COVER_B": 0.075,
         # khung tên
         "MABV": "",
@@ -276,6 +277,26 @@ def validate(p) -> str | None:
 
 
 GAP_MIN = 0.04      # khoảng hở ngang tối thiểu giữa các thanh thép chủ (m)
+
+
+ARR_NAMES = ["Các hàng đều nhau", "Xếp đầy hàng ngoài"]
+
+
+def rib_rows(n, m, arr):
+    """Số thanh mỗi hàng thép chủ dầm (1 mặt), m = số thanh tối đa 1 hàng (khoảng hở ngang >= 40 mm).
+    Xếp đầy hàng ngoài trước, hàng dưới tối thiểu 2 thanh (2 bên); nếu hàng dưới > 2 thanh và chọn
+    'đều nhau' thì chia đều các hàng."""
+    n, m = max(1, int(n)), max(2, int(m))
+    nrow = -(-n // m)
+    fill = [m] * (nrow - 1) + [n - m * (nrow - 1)]
+    if nrow > 1 and fill[-1] < 2 and fill[-2] - (2 - fill[-1]) >= 2:   # hàng dưới tối thiểu 2 thanh ở 2 bên
+        fill[-2] -= 2 - fill[-1]
+        fill[-1] = 2
+    if fill[-1] <= 2 or int(arr) == 1:
+        return fill
+    per = [-(-n // nrow)] * nrow
+    per[-1] = n - sum(per[:-1])
+    return per
 
 
 def warnings(p) -> list:
