@@ -540,9 +540,32 @@ def plan_bars(c: Ctx, g: Geo, v: V):
             ox, oy = cc + t * r2, cc + t * r2
             v.ln("COTTHEP", ox + r2 * hl, oy - r2 * hl, ox - r2 * hl, oy + r2 * hl)
             pts.append(v.P(ox - r2 * 0.45 * hl, oy + r2 * 0.45 * hl))
-        q = pts[-1]
-        yb = min(v.y(g.dy - a / 2 - g.e) - 4.0, q[1] + 6.0)
-        co([q], max(q[0] - 2.0, cx_ + 3.5), yb, -1, 5, f"{g.n5 // 4}%%C{int(d)}", "02 LỚP")
+        # tag đặt ở ô trống phía trên thanh xiên: giữa thanh đại diện thép 3 (ô giữa) và mặt dầm theo X,
+        # leader xiên ngắn từ thanh xiên ngoài cùng; không đủ chỗ thì để như cũ
+        ys_in = [y for y in g.ys3 if g.c / 2 < y < g.dy - a / 2]
+        t5 = f"{g.n5 // 4}%%C{int(d)}"
+        y3 = ys_in[len(ys_in) // 3] if ys_in else g.c / 2
+        yb = 0.5 * (v.y(y3) + v.y(g.dy - a / 2))
+        so = oy + ox                                   # thanh xiên ngoài cùng: x + y = const
+        xbar = v.x(so - (yb - v.y(0.0)) / v.k)
+        need = max(txtw(t5, 2.0), txtw("02 LỚP", 2.0)) + 1.5 + 6.5
+        ys4 = [y for y in g.ys4 if y >= -1e-9] or g.ys4
+        y4 = mid(ys4)
+        yb2 = 0.5 * (v.y(y3) + v.y(y4))                # ô 2: bên phải dầm theo Y, kẹp giữa 2 thanh đại diện
+        bx2 = v.x(g.dx + a / 2) + 1.5
+        ylo, yhi = v.y(oy - r2 * hl), v.y(oy + r2 * hl)
+
+        def on_bar(yq):                                # điểm trên thanh xiên ngoài cùng tại cao độ giấy yq
+            yq = max(ylo + 0.5, min(yhi - 0.5, yq))
+            return (v.x(so - (yq - v.y(0.0)) / v.k), yq)
+        if yb - v.y(y3) >= 4.0 and xbar + 2.0 + need <= v.x(g.dx - a / 2 - g.e) - 0.5:
+            co([on_bar(yb - 3.0)], xbar + 2.0, yb, 1, 5, t5, "02 LỚP")
+        elif v.y(y3) - yb2 >= 3.6 and bx2 + need <= v.x(xm) - 1.0:
+            co([on_bar(yb2 - 1.0)], bx2, yb2, 1, 5, t5, "02 LỚP")
+        else:
+            q = pts[-1]
+            yb = min(v.y(g.dy - a / 2 - g.e) - 4.0, q[1] + 6.0)
+            co([q], max(q[0] - 2.0, cx_ + 3.5), yb, -1, 5, t5, "02 LỚP")
     # --- thép chủ dầm: trên mặt bằng chỉ thấy các thanh lớp ngoài cùng, vẽ từ trục đối xứng tới đầu dầm
     full_y, cut_y = g.rib_len(True)
     full_x, cut_x = g.rib_len(False)

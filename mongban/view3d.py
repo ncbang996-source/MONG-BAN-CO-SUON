@@ -144,7 +144,8 @@ class Scene:
             full, cut = g.rib_len(along_y)
             for s in (-1, 1):
                 t = s * (dx if along_y else dy)
-                for z, row in g.rows_b + g.rows_t:
+                rows_b = g.rows_bot(along_y)
+                for z, row in rows_b + g.rows_t:
                     for u, fl in row:
                         ln = (full if fl else cut) / 2
                         p0 = (t + u, -ln, z) if along_y else (-ln, t + u, z)
@@ -158,7 +159,7 @@ class Scene:
                         self.L("rib", COL["gia"], g.dg, [p0, p1])
                 # đai dầm, đai phụ ngang (mức thép giá + giữ lớp 2), đai phụ đứng
                 uo = a / 2 - cov - dt / 2
-                zb = g.rows_b[0][0] - dm / 2 - dt / 2
+                zb = rows_b[0][0] - dm / 2 - dt / 2
                 zt = g.rows_t[0][0] + dm / 2 + dt / 2
                 P = (lambda st, u, z: (t + u, st, z)) if along_y else (lambda st, u, z: (st, t + u, z))
                 for st in g.stirrups(along_y):
@@ -169,15 +170,14 @@ class Scene:
                     st += 0.03                           # lệch khỏi đai chính cho dễ nhìn
                     for z in list(g.z_gia):
                         self.L("dai", COL["tie"], dp, [P(st, -uo, z), P(st, uo, z)])
-                    for z in g.z_tie2():
-                        u2 = g.u_tie2()
-                        self.L("dai", COL["tie"], dp, [P(st, -u2, z), P(st, u2, z)])
+                    for z in g.z_tie2(along_y):
+                        self.L("dai", COL["tie"], dp, [P(st, -uo, z), P(st, uo, z)])
                     if g.has_vtie():
                         self.L("dai", COL["tie"], dp, [P(st, 0.0, zb), P(st, 0.0, zt)])
         # thanh chống (6): thân đứng giữa 2 lớp thép bản, 2 chân ngang
         dch = g.g("RCH_D") / 1000.0
         from .geom import CH_LEG, ANCHOR, TL_LEG, TL_W, TL_OUT
-        z0c = g.covb + 2 * ds
+        z0c = g.covb + ds                  # đỡ thanh ngoài cùng lớp dưới / lớp trên
         z1c = z0c + g.chair_body()
         for x, y in g.chairs:
             self.L("slab", COL["chair"], dch, [(x + CH_LEG, y, z0c), (x, y, z0c), (x, y, z1c), (x + CH_LEG, y, z1c)])

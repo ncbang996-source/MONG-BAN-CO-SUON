@@ -55,7 +55,8 @@ def rib_section(c: Ctx, g: Geo, co: Callouts, ox, oy, along_y: bool, name: str):
     for u in dots:
         v.disc("COTTHEP", u, zd_b, rs)
         v.disc("COTTHEP", u, zd_t, rs)
-    zi_b, zi_t = max(zl_b, zd_b) + g.ds / 2, min(zl_t, zd_t) - g.ds / 2
+    # thanh chống đỡ thanh ngoài cùng của lớp dưới và lớp trên: thân = h bản - 2 lớp bảo vệ - 2Ø (như bảng thống kê)
+    zi_b, zi_t = min(zl_b, zd_b) + g.ds / 2, max(zl_t, zd_t) - g.ds / 2
     rch = v.rbar(p["RCH_D"])
     # thanh chống đặt kẹp sát 1 thanh thép bản (chấm tròn)
     gap = (p["RS_D"] + p["RCH_D"]) / 2000.0
@@ -83,22 +84,22 @@ def rib_section(c: Ctx, g: Geo, co: Callouts, ox, oy, along_y: bool, name: str):
     w2 = a / 2 - cov
     dai_draw(c, "DAI", v.x(-w2), v.y(covb), v.x(w2), v.y(hd - cov), 0.8, 1.2)
     rm = v.rbar(p["RD_D"])
-    for z, row in g.rows_b + g.rows_t:
+    rows_b = g.rows_bot(along_y)
+    for z, row in rows_b + g.rows_t:
         for u, _ in row:
             v.disc("COTTHEP", u, z, rm)
     rg = v.rbar(p["RS_D"])
     rh = max(rm, rg) + 0.12      # móc 2 đầu của mọi thanh đai phụ (thép giá + giữ lớp 2) bằng nhau
+    lt = v.k * 2 * w2 - 2 * rh   # đai phụ (kể cả móc) dài bằng bề rộng đai chính
     for z in g.z_gia:
         for s in (-1, 1):
             v.disc("COTTHEP", s * g.u_gia, z, rg)
-        tie(c, "DAI", v.x(-g.u_gia - g.dg / 2 - 0.004), v.y(z - g.dg / 2 - 0.004), 1.0, 0.0,
-            v.k * (2 * g.u_gia + g.dg + 0.008), rh, 1.4)
+        tie(c, "DAI", v.x(-w2) + rh, v.y(z - g.dg / 2 - 0.004), 1.0, 0.0, lt, rh, 1.4)
     if g.has_vtie():
         v.ln("DAI", 0.0, covb + g.dt, 0.0, hd - cov - g.dt)
-    um = g.u_tie2()
-    zt2 = g.z_tie2()             # đai phụ giữ lớp thép 2: ngay dưới hàng lớp 2, móc ôm 2 thanh biên
+    zt2 = g.z_tie2(along_y)      # đai phụ giữ lớp thép 2: ngay dưới hàng lớp 2, móc ôm 2 thanh biên
     for z in zt2:
-        tie(c, "DAI", v.x(-um), v.y(z), 1.0, 0.0, v.k * 2 * um, rh, 1.4)
+        tie(c, "DAI", v.x(-w2) + rh, v.y(z), 1.0, 0.0, lt, rh, 1.4)
     # chú thích: thép chủ - gióng vuông góc tới từng thanh (không xẹt); đai - leader ngang có xẹt 45°
     pf, pc, pg = (10, 11, 12) if along_y else (13, 14, 15)
     xr = v.x(ur) + 2.0
@@ -132,7 +133,7 @@ def rib_section(c: Ctx, g: Geo, co: Callouts, ox, oy, along_y: bool, name: str):
     zt17 = sorted([z - g.dg / 2 - 0.004 for z in g.z_gia] + zt2, reverse=True)
     if zt17:                     # đai phụ ngang: 1 leader đứng qua mọi vị trí, đặt ở khe giữa 2 thanh thép chủ
         by = yprev - 6.0
-        us = sorted(u for u, _ in g.rows_b[0][1])
+        us = sorted(u for u, _ in rows_b[0][1])
         u17 = 0.5 * (us[-1] + us[-2]) if len(us) > 1 else 0.5 * w2
         co([v.P(u17, z) for z in zt17], ex_r(by), by, 1, 17, phi(p["RDP_D"], p["RDP_S"]), mode=True)
     if g.has_vtie():
@@ -410,7 +411,7 @@ def half_bb(c: Ctx, g: Geo, co: Callouts, xax, ytop):
     sym(c, v.x(0.0), v.y(g.H) - 0.5)
     # thép chủ dầm theo X (13 dài suốt, 14 ngắt), thép giá (15)
     full, cut = g.rib_len(False)
-    for z, row in g.rows_b + g.rows_t:
+    for z, row in g.rows_bot(False) + g.rows_t:
         if any(f for _, f in row):
             v.ln("COTTHEP", -full / 2, z, 0.0, z)
         if any(not f for _, f in row):
@@ -468,11 +469,11 @@ def half_bb(c: Ctx, g: Geo, co: Callouts, xax, ytop):
     xe = v.x(-L) + 2.0
     # 13, 14: kiểu đường kích thước - gióng đứng nối thanh dưới với thanh trên, xẹt 2 đầu
     x13 = gap_x(-L + 0.4)
-    co([v.P(x13, g.rows_t[0][0]), v.P(x13, g.rows_b[0][0])], xe, v.y(hd) + 6.0, -1, 13,
+    co([v.P(x13, g.rows_t[0][0]), v.P(x13, g.rows_bot(False)[0][0])], xe, v.y(hd) + 6.0, -1, 13,
        f"{2 * g.n_full}%%C{ni(d)}", mode=True)
     if g.n_cut and len(g.rows_t) > 1:
         x14 = gap_x(max(-cut / 2 + 0.3, x13 + 0.5))
-        co([v.P(x14, g.rows_t[1][0]), v.P(x14, g.rows_b[1][0])], xe, v.y(hd) + 12.0, -1, 14,
+        co([v.P(x14, g.rows_t[1][0]), v.P(x14, g.rows_bot(False)[1][0])], xe, v.y(hd) + 12.0, -1, 14,
            f"{2 * g.n_cut}%%C{ni(d)}", mode=True)
     else:
         x14 = x13
@@ -482,7 +483,7 @@ def half_bb(c: Ctx, g: Geo, co: Callouts, xax, ytop):
     # 16: đường ngang cắt qua 3 đai, có xẹt
     s16 = sorted(sts)[1:4]
     if s16:
-        z16 = g.rows_b[-1][0] + g.dm / 2 + 0.06          # thấp, tránh chữ kích thước chiều cao dầm
+        z16 = g.rows_bot(False)[-1][0] + g.dm / 2 + 0.06          # thấp, tránh chữ kích thước chiều cao dầm
         co([v.P(x, z16) for x in s16], v.x(-L - ml) - 9.0, v.y(z16), -1, 16, phi(p["RDT_D"], p["RDT_S"]),
            mode=True)
     # cổ móng: chú thích bên trái cổ, đặt ở khoảng hở giữa 2 đai; thang leo bên phải

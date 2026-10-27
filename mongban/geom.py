@@ -209,12 +209,21 @@ class Geo:
         """Thép chủ dầm 2 lớp -> thêm đai phụ ngang giữ lớp thứ 2 (mặt trên và mặt dưới)."""
         return len(self.rows_b) > 1
 
-    def z_tie2(self):
+    def drop_b(self, along_y):
+        """Hạ thép chủ đáy dầm xuống tựa ngay trên lớp thép bản vuông góc với dầm (ngang cao độ thanh thép bản
+        song song) khi lớp thép bản song song nằm trên; ngược lại giữ trên cả 2 lớp."""
+        return self.ds if along_y == self.long_x() else 0.0
+
+    def rows_bot(self, along_y):
+        dz = self.drop_b(along_y)
+        return [(z - dz, row) for z, row in self.rows_b]
+
+    def z_tie2(self, along_y=True):
         """Cao độ đai phụ giữ lớp 2: nằm ngay dưới hàng thép lớp 2 (đỡ lớp 2, như đai ở thép giá)."""
         if not self.has_tie2():
             return []
         dz = self.dm / 2 + 0.004
-        return [self.rows_b[1][0] - dz, self.rows_t[1][0] - dz]
+        return [self.rows_bot(along_y)[1][0] - dz, self.rows_t[1][0] - dz]
 
     def u_tie2(self):
         """Nửa chiều dài đai phụ giữ lớp 2 (móc ôm 2 thanh biên của lớp 2)."""
