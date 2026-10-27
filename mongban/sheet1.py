@@ -235,12 +235,12 @@ def dim_section(c: Ctx, g: Geo):
     # bên trái: H1, H2 (ngoài); bản, dầm, cổ (trong)
     c.dimV("DIM", (xa, g.ygl), (xa, g.ybase), g.dimX1)
     c.dimV("DIM", (xa, g.ygl), (xa, g.ytop), g.dimX1)
-    xl = cx - k * L
-    c.dimV("DIM", (xl, g.ybase), (xl, g.ybase + k * g.hs), g.dimX2)
-    c.dimV("DIM", (xl, g.ybase + k * g.hs), (xl, g.ybase + k * g.hd), g.dimX2)
-    c.dimV("DIM", (xl, g.ybase + k * g.hd), (cx - k * (g.dx + g.bb / 2), g.ytop), g.dimX2)
+    # đường gióng chỉ kéo tới gần mép miệng hố (không chạy vào trong hình)
+    c.dimV("DIM", (xa, g.ybase), (xa, g.ybase + k * g.hs), g.dimX2)
+    c.dimV("DIM", (xa, g.ybase + k * g.hs), (xa, g.ybase + k * g.hd), g.dimX2)
+    c.dimV("DIM", (xa, g.ybase + k * g.hd), (xa, g.ytop), g.dimX2)
     xr1 = cx - k * (g.pitB + (s * (hc + model.TL) if g.hasCushion else 0.0))
-    xd = xr1 - 4.5
+    xd = xr1 - 8.5
     xpb = cx - k * (g.pitB + (s * hc if g.hasCushion else 0.0))
     if g.hasCushion:
         yt = g.ybase + 1.0 + w100 / 2
@@ -260,13 +260,9 @@ def dim_section(c: Ctx, g: Geo):
     c.dimH("DIM", (cx - hl, g.ybase), (cx - k * g.pitB, g.ylb), g.yd, (cx - k * g.pitB - 3.2, g.yd + 1.7))
     c.dimH("DIM", (cx + hl, g.ybase), (cx + k * g.pitB, g.ylb), g.yd, (cx + k * g.pitB + 3.2, g.yd + 1.7))
     if g.hasCushion:
-        # đoạn vải địa gấp vào dưới móng 500: điểm đo trên lớp vải địa, đường gióng ngắt qua lớp đệm cát
-        yd5 = g.ylb - 5.0
-        noext = {"dimse1": 1, "dimse2": 1}
+        # đoạn vải địa gấp vào dưới móng 500: đường gióng đặt từ mép dưới lớp đệm cát
         for x1, x2 in ((cx - k * L, cx - k * L + 0.5 * k), (cx + k * L - 0.5 * k, cx + k * L)):
-            c.dim("DIM", 0.0, (x1, g.ylt), (x2, g.ylt), (x1, yd5), override=noext)
-            for x in (x1, x2):
-                c.ln("DIM", x, g.ylb - 1.0, x, yd5 - 1.0)
+            c.dimH("DIM", (x1, g.ylb), (x2, g.ylb), g.ylb - 5.0)
     # trên: tim cổ móng, bề rộng cổ móng
     y1, y2 = g.ytop + 6.0, g.ytop + 12.9
     for s_ in (-1, 1):
@@ -345,16 +341,16 @@ def draw_route(c: Ctx, g: Geo, cx, cy, lh, lx):
         sn, cs = math.sin(dlt), math.cos(dlt)
         vee(c, cx, cy, cx - lh * sn, cy + lh * cs)
         vee(c, cx, cy, cx - lh * sn, cy - lh * cs)
-        c.txr("CHU", cx - a * sn + 2.4 * cs, cy + a * cs + 2.4 * sn, 2.0, T_ROUTE, 90.0 + 10.0)
+        c.txr("CHU", cx - a * sn - 2.4 * cs, cy + a * cs - 2.4 * sn, 2.0, T_ROUTE, 90.0 + 10.0)
         vee(c, cx, cy, cx - lx, cy)
         c.tx("CHU", cx - lx + 1.0, cy + 1.2, 2.0, T_BISECT)
     elif ht == 2:
         vee(c, cx, cy, cx, cy - lh)
-        c.txr("CHU", cx + 2.4, cy - a, 2.0, T_ROUTE, 90.0)
+        c.txr("CHU", cx - 2.4, cy - a, 2.0, T_ROUTE, 90.0)
     else:
         vee(c, cx, cy, cx, cy - lh)
         vee(c, cx, cy, cx, cy + lh)
-        c.txr("CHU", cx + 2.4, cy + a, 2.0, T_ROUTE, 90.0)
+        c.txr("CHU", cx - 2.4, cy + a, 2.0, T_ROUTE, 90.0)
 
 
 def dim_plan(c: Ctx, g: Geo, v: V):
@@ -368,10 +364,11 @@ def dim_plan(c: Ctx, g: Geo, v: V):
         if i in (0, len(ys) - 2):
             yy = v.y(ys[i]) - 1.0 - w100 / 2 if i == 0 else v.y(ys[i + 1]) + 1.0 + w100 / 2
             tp = (x0 - 10.0 - 2.0, yy)
-        v.dimV((-L, ys[i]), (-L, ys[i + 1]), x0 - 10.0, tp)
+        v.dimV((-L - ml, ys[i]), (-L - ml, ys[i + 1]), x0 - 10.0, tp)
+    # điểm đo đặt ở mép lót -> đường gióng có khe hở với nét bê tông lót
     for y1, y2 in ((-B, -g.dy), (-g.dy, g.dy), (g.dy, B)):
-        v.dimV((-L, y1), (-g.dx, y2), x0 - 17.0)
-    v.dimV((-L, -B), (-L, B), x0 - 24.0)
+        v.dimV((-L - ml, y1), (-L - ml, y2), x0 - 17.0)
+    v.dimV((-L - ml, -B), (-L - ml, B), x0 - 24.0)
     # dưới
     y0 = v.y(-B - ml)
     xs = [-L - ml, -L, -g.dx - a / 2, -g.dx + a / 2, g.dx - a / 2, g.dx + a / 2, L, L + ml]
@@ -380,10 +377,10 @@ def dim_plan(c: Ctx, g: Geo, v: V):
         if i in (0, len(xs) - 2):
             xx = v.x(xs[i]) - 1.0 - w100 / 2 if i == 0 else v.x(xs[i + 1]) + 1.0 + w100 / 2
             tp = (xx, y0 - 5.0 + 2.0)
-        v.dimH((xs[i], -B), (xs[i + 1], -B), y0 - 5.0, tp)
+        v.dimH((xs[i], -B - ml), (xs[i + 1], -B - ml), y0 - 5.0, tp)
     for x1, x2 in ((-L, -g.dx), (-g.dx, g.dx), (g.dx, L)):
-        v.dimH((x1, -B), (x2, -g.dy), y0 - 12.0)
-    v.dimH((-L, -B), (L, -B), y0 - 19.0)
+        v.dimH((x1, -B - ml), (x2, -B - ml), y0 - 12.0)
+    v.dimH((-L, -B - ml), (L, -B - ml), y0 - 19.0)
     # cổ móng, vát nách, lỗ mở (góc trên trái)
     px, py = -g.dx, g.dy
     bb = g.bb
@@ -490,8 +487,8 @@ def plan_bars(c: Ctx, g: Geo, v: V):
             if abs(by - u) < 8.0:
                 by = max(lo_ + 0.5, min(hi_ - 0.5, u - 8.0 if by < u else u + 8.0))
         used.append(by)
-        if abs(by - v.y(y)) < 1.0:           # không trùng điểm thanh đại diện
-            by = min(hi_ - 0.3, by + 1.5)
+        if abs(by - v.y(y)) < 3.0:           # điểm chạm cách xa chấm thanh đại diện
+            by = v.y(y) + 3.0 if v.y(y) + 3.0 <= hi_ - 0.3 else v.y(y) - 3.0
         co([(v.x(xm), by)], xr, by, 1, pos, phi(d, s), f"SL:{2 * len(yy)}%%C{int(d)} - 2 LỚP", tick=False,
            mode=True)
     # --- thanh theo Y (thép 1, 2) ở nửa dưới: đường rải ngang gần mép dưới; leader chạm đường rải
@@ -514,8 +511,7 @@ def plan_bars(c: Ctx, g: Geo, v: V):
         arrow2(c, v.x(min(xx)), v.y(ybar), v.x(max(xx)), v.y(ybar))
         c.ci("CHU", v.x(x), v.y(ybar), 0.5)
         s = p["RS_S2"] if kd == "out" else p["RS_S1"]
-        nx_ = [q for q in xx if q > x + 1e-6]
-        xt = 0.5 * (x + nx_[0]) if nx_ else 0.5 * (x + max(xx)) if max(xx) > x else x - 0.05
+        xt = x + 3.0 / v.k if x + 3.0 / v.k <= max(xx) else x - 3.0 / v.k   # cách chấm thanh đại diện 3 mm
         yq -= 9.0
         by = max(ylo, yq)
         co([v.P(xt, ybar)], xr, by, 1, pos, phi(d, s), f"SL:{2 * len(xx)}%%C{int(d)} - 2 LỚP", tick=False,
@@ -545,20 +541,21 @@ def plan_bars(c: Ctx, g: Geo, v: V):
     uf = [u for u, f in row if f]
     ex = v.x(g.dx + a / 2) + 0.8
     yt = 0.5 * (cut_y / 2 + full_y / 2)
-    co([v.P(g.dx + u, yt) for u in uf], ex, v.y(yt), 1, 10, f"{g.n_full}%%C{dm}", tick=False, mode=True)
+    co([v.P(g.dx + u, yt) for u in uf], ex, v.y(yt), 1, 10, f"{g.n_full}%%C{dm}", mode=True)
     yc = 0.5 * (g.dy + a / 2 + g.e + cut_y / 2)
     if g.n_cut:
-        co([v.P(g.dx + u, yc) for u, _ in row], ex, v.y(yc), 1, 11, f"{g.n_cut}%%C{dm}", tick=False, mode=True)
+        co([v.P(g.dx + u, yc) for u, _ in row], ex, v.y(yc), 1, 11, f"{g.n_cut}%%C{dm}", mode=True)
     # kích thước đoạn cắt thép dầm
-    v.dimV((g.dx - a / 2, cut_y / 2), (g.dx - a / 2, full_y / 2), v.x(g.dx - a / 2) - 3.0)
-    v.dimH((cut_x / 2, g.dy + a / 2), (full_x / 2, g.dy + a / 2), v.y(g.dy + a / 2) + 2.5)
+    # kích thước đoạn cắt tính từ mép móng
+    v.dimV((g.dx - a / 2, cut_y / 2), (g.dx - a / 2, B), v.x(g.dx - a / 2) - 3.0)
+    v.dimH((cut_x / 2, g.dy + a / 2), (L, g.dy + a / 2), v.y(g.dy + a / 2) + 2.5)
     xt = 0.5 * (cut_x / 2 + full_x / 2)
-    co([v.P(xt, g.dy + u) for u in uf], xr, v.y(g.dy + a / 2) + 7.0, 1, 13, f"{g.n_full}%%C{dm}", tick=False,
+    co([v.P(xt, g.dy + u) for u in uf], xr, v.y(g.dy + a / 2) + 7.0, 1, 13, f"{g.n_full}%%C{dm}", tick=True,
        mode=True)
     if g.n_cut:
         xc = 0.5 * (g.dx + a / 2 + g.e + cut_x / 2)
-        co([v.P(xc, g.dy + u) for u, _ in row], v.x(xc) - 1.0, v.y(g.dy - a / 2) - 4.0, 1, 14, f"{g.n_cut}%%C{dm}",
-           tick=False, mode=True)
+        co([v.P(xc, g.dy + u) for u, _ in row], v.x(xc), v.y(g.dy - a / 2) - 4.0, 1, 14, f"{g.n_cut}%%C{dm}",
+           mode=True)
 
 
 # ---------------------------------------------------------------------------

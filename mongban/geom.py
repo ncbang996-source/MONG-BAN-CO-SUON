@@ -200,18 +200,25 @@ class Geo:
         self.cut_x = math.ceil(self.D1 / 2 / 0.1 - 1e-6) * 0.1
 
     def rib_len(self, along_y):
-        full = (self.g("B") if along_y else self.g("L")) - 2 * self.cov
-        return full, max(0.0, full - 2 * (self.cut_y if along_y else self.cut_x))
+        span = self.g("B") if along_y else self.g("L")
+        full = span - 2 * self.cov
+        # đầu thanh ngắt cách mép móng một đoạn cắt (tính từ mép móng)
+        return full, max(0.0, span - 2 * (self.cut_y if along_y else self.cut_x))
 
     def has_tie2(self):
         """Thép chủ dầm 2 lớp -> thêm đai phụ ngang giữ lớp thứ 2 (mặt trên và mặt dưới)."""
         return len(self.rows_b) > 1
 
     def z_tie2(self):
-        """Cao độ đai phụ giữ lớp 2: nằm trong khe giữa lớp 1 và lớp 2 (đỡ lớp 2)."""
+        """Cao độ đai phụ giữ lớp 2: nằm ngay dưới hàng thép lớp 2 (đỡ lớp 2, như đai ở thép giá)."""
         if not self.has_tie2():
             return []
-        return [0.5 * (self.rows_b[0][0] + self.rows_b[1][0]), 0.5 * (self.rows_t[0][0] + self.rows_t[1][0])]
+        dz = self.dm / 2 + 0.004
+        return [self.rows_b[1][0] - dz, self.rows_t[1][0] - dz]
+
+    def u_tie2(self):
+        """Nửa chiều dài đai phụ giữ lớp 2 (móc ôm 2 thanh biên của lớp 2)."""
+        return max(abs(u) for u, _ in self.rows_b[1][1]) + self.dm / 2 + 0.004 if self.has_tie2() else 0.0
 
     def rib_segments(self, along_y):
         """Đoạn dầm rải đai (bỏ vùng giao dầm + vát nách), toạ độ dọc dầm."""

@@ -141,10 +141,16 @@ class App(tk.Tk):
         self.pending: dict = {}      # dịch chuyển chưa dựng lại
         self._drag = None
         self._geom = None
+        self._undo: list = []        # Ctrl+Z / Ctrl+Y khi sắp xếp
+        self._redo: list = []
         self._job = None
         self._build_ui()
         self._fill()
         self.protocol("WM_DELETE_WINDOW", self.on_close)
+        for k in ("<Control-z>", "<Control-Z>"):
+            self.bind_all(k, lambda e: self._undo_redo(True))
+        for k in ("<Control-y>", "<Control-Y>"):
+            self.bind_all(k, lambda e: self._undo_redo(False))
         if self.xls and os.path.isfile(self.xls) and not self.st.get("params"):
             self.after(200, lambda: self.read_excel(self.xls))
         else:
@@ -240,7 +246,7 @@ class App(tk.Tk):
         self.v_auto = tk.BooleanVar(value=self.st.get("auto", True))
         ttk.Checkbutton(g3, text="Tự cập nhật", variable=self.v_auto, style="Bar.TCheckbutton").pack(side="left", padx=6)
         self.v_arr = tk.BooleanVar(value=False)
-        ttk.Checkbutton(g3, text="Sắp xếp (kéo thả)", variable=self.v_arr, style="Bar.TCheckbutton",
+        ttk.Checkbutton(g3, text="Sắp xếp (kéo thả, Ctrl+Z / Ctrl+Y)", variable=self.v_arr, style="Bar.TCheckbutton",
                         command=self._redraw).pack(side="left", padx=(0, 6))
         g4 = group("Xuất")
         btn(g4, "PDF", self.export_pdf, "Export")
@@ -271,8 +277,13 @@ class App(tk.Tk):
         cv.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
         self._scroll_left = cv
-        cv.bind("<Enter>", lambda e: cv.bind_all("<MouseWheel>", self._wheel_left))
-        cv.bind("<Leave>", lambda e: cv.unbind_all("<MouseWheel>"))
+        # con lăn: 1 bộ xử lý chung, chọn khung theo vị trí con trỏ (không phụ thuộc Enter/Leave)
+        self.bind_all("<MouseWheel>", self._wheel_any)
+        self.bind_all("<Button-4>", lambda e: self._wheel_any(e, 120))
+        self.bind_all("<Button-5>", lambda e: self._wheel_any(e, -120))
+        # Combobox không tự đổi giá trị khi lăn qua -> cuộn khung thông số
+        for ev, dl in (("<MouseWheel>", None), ("<Button-4>", 120), ("<Button-5>", -120)):
+            self.bind_class("TCombobox", ev, lambda e, dl=dl: (self._wheel_any(e, dl), "break")[1])
         self._form(body)
 
         # xem trước
@@ -298,9 +309,7 @@ class App(tk.Tk):
         self.pv.bind("<B2-Motion>", lambda e: self.pv.scan_dragto(e.x, e.y, gain=1))
         self.pv.bind("<ButtonPress-3>", self._context)
         self.pv.bind("<Motion>", self._hover)
-        self.pv.bind("<MouseWheel>", self._wheel_zoom)
-        self.pv.bind("<Button-4>", lambda e: self.zoom_by(1.15))
-        self.pv.bind("<Button-5>", lambda e: self.zoom_by(1 / 1.15))
+
 
         st = tk.Frame(self, background=C["navy"])
         st.pack(side="bottom", fill="x", before=pw)
@@ -312,8 +321,29 @@ class App(tk.Tk):
                               font=(f[0], f[1] - 1), padx=10, pady=3)
         self.l_msg.pack(side="left", fill="x")
 
-    def _wheel_left(self, e):
-        self._scroll_left.yview_scroll(int(-e.delta / 120), "units")
+    def _inside(self, w, root):
+        while w is not None:
+            if w == root:
+                return True
+            w = getattr(w, "master", None)
+        return False
+
+    def _wheel_any(self, e, delta=None):
+        delta = e.delta if delta is None else delta
+        if not delta:
+            return
+        try:
+            w = self.winfo_containing(e.x_root, e.y_root)
+        except (KeyError, tk.TclError):
+            return
+        if w is None:
+            return
+        if self._inside(w, self.pv):
+            self.zoom_by(1.15 if delta > 0 else 1 / 1.15, e)
+        elif self._inside(w, self._scroll_left.master):
+            step = -1 if delta > 0 else 1
+            n = max(1, abs(int(delta / 120)))
+            self._scroll_left.yview_scroll(step * n, "units")
 
     def _var(self, key, kind="s"):
         v = tk.StringVar()
@@ -474,6 +504,8 @@ class App(tk.Tk):
         self.p, self.xls = p, path
         self.offsets = load_layout(path)
         self.pending = {}
+        self._undo.clear()
+        self._redo.clear()
         self._fill()
         msg = f"Đã đọc {os.path.basename(path)}."
         if warn:
@@ -639,14 +671,25 @@ class App(tk.Tk):
         self.zoom = None
         self._redraw()
 
-    def zoom_by(self, f):
+    def zoom_by(self, f, e=None):
+        """Phóng to / thu nhỏ; có sự kiện chuột thì giữ nguyên điểm bản vẽ dưới con trỏ."""
         if not self.pages:
             return
+        old = self._geom
+        if e is not None and old:
+            ex, ey = e.x_root - self.pv.winfo_rootx(), e.y_root - self.pv.winfo_rooty()
+            cx, cy = self.pv.canvasx(ex), self.pv.canvasy(ey)
+            ow, oh = self._zimg.width, self._zimg.height
+            fu, fv = (cx - old[0]) / ow, (cy - old[1]) / oh
         self.zoom = min(4.0, max(0.1, (self.zoom or self._fit_zoom()) * f))
         self._redraw()
-
-    def _wheel_zoom(self, e):
-        self.zoom_by(1.15 if e.delta > 0 else 1 / 1.15)
+        if e is not None and old and self._geom:
+            x0, y0, _ = self._geom
+            nw, nh = self._zimg.width, self._zimg.height
+            sw = max(self.pv.winfo_width(), nw + 20)
+            sh = max(self.pv.winfo_height(), nh + 20)
+            self.pv.xview_moveto(max(0.0, (x0 + fu * nw - ex) / sw))
+            self.pv.yview_moveto(max(0.0, (y0 + fv * nh - ey) / sh))
 
     def _fit_zoom(self):
         im = self.pages[self.page_i]
@@ -790,7 +833,28 @@ class App(tk.Tk):
             return
         self._move(o.id, dx, dy)
 
+    def _snap(self):
+        """Lưu trạng thái sắp xếp trước khi thay đổi (cho Ctrl+Z)."""
+        self._undo.append(copy.deepcopy(self.offsets))
+        del self._undo[:-100]
+        self._redo.clear()
+
+    def _undo_redo(self, back):
+        if not self.v_arr.get():
+            return
+        src, dst = (self._undo, self._redo) if back else (self._redo, self._undo)
+        if not src:
+            return
+        dst.append(copy.deepcopy(self.offsets))
+        self.offsets = src.pop()
+        self.pending = {}
+        self.dirty = True
+        save_layout(self.xls, self.offsets)
+        self.l_msg.config(text="Đã hoàn tác." if back else "Đã làm lại.")
+        self.preview()
+
     def _move(self, oid, dx, dy):
+        self._snap()
         cur = self.offsets.get(oid, [0.0, 0.0])
         self.offsets[oid] = [round(cur[0] + dx, 2), round(cur[1] + dy, 2)]
         pd = self.pending.get(oid, [0.0, 0.0])
@@ -816,6 +880,8 @@ class App(tk.Tk):
         m.tk_popup(e.x_root, e.y_root)
 
     def _reset(self, ids):
+        if any(any(k == i or k.startswith(i + ".") for i in ids) for k in self.offsets):
+            self._snap()
         changed = False
         for k in list(self.offsets):
             if any(k == i or k.startswith(i + ".") for i in ids):
