@@ -35,7 +35,11 @@ PARAMS = [
     ("Hệ số mở mái hố đào", "m", "SLOPE", 1, ""),
     ("Mở rộng đáy hố đào (mỗi bên)", "mp", "MPIT", 1, "m"),
     ("Số thân trụ", "n", None, 4, "trụ"),
-]
+    ("Chiều cao đắp móng", "hđđ", "HDD", 1, "m"),
+    ("Chiều cao đối trọng", "hđt", "HDT", 1, "m"),
+    ("Hình thức cột: 0 đỡ, 1 néo góc, 2 néo dừng", "ht", "HT", 1, ""),
+    ("Đối trọng: 0 = 1/2 diện tích móng, 1 = chọn ô bản", "dtm", "DT_MODE", 1, ""),
+] + [(f"Đối trọng ở ô bản {i} (1 = có)", f"o{i}", None, 0, "") for i in range(1, 7)]
 # thông số cốt thép (đơn vị như bảng nhập: Ø, @ theo mm)
 PARAMS_S = [
     ("Lớp BT bảo vệ đáy móng", "cvb", "COVER_B", 1, "m"),
@@ -73,7 +77,8 @@ PARAMS_S = [
 ]
 NAME = {"L1": "TS_L1", "L2": "TS_L2", "L": "TS_L", "B": "TS_B", "h1": "TS_hs", "a": "TS_a", "h": "TS_hd",
         "e": "TS_e", "c": "TS_c", "b": "TS_bc", "H1": "TS_H1", "H2": "TS_H2", "tl": "TS_tl", "ml": "TS_ml",
-        "hc": "TS_hc", "m": "TS_m", "mp": "TS_mp", "n": "TS_n"}
+        "hc": "TS_hc", "m": "TS_m", "mp": "TS_mp", "n": "TS_n", "hđđ": "TS_hdd", "hđt": "TS_hdt", "ht": "TS_ht",
+        "dtm": "TS_dtm", **{f"o{i}": f"TS_o{i}" for i in range(1, 7)}}
 
 
 NAMES = {1: "Thép bản móng theo Y", 2: "Thép bản theo Y, ngắt tại lỗ", 3: "Thép bản móng theo X",
@@ -116,9 +121,12 @@ def export(p: dict, g: Geo, path: str):
     r = 4
     for i, h in enumerate(["STT", "Thông số", "Ký hiệu", "Giá trị", "Đơn vị"], 1):
         _cell(ws, r, i, h, bold=True, fill=HEAD, align=Alignment(horizontal="center", vertical="center"))
+    sel = str(p.get("DT_SEL", ""))
     for k, (nm, sym, key, f, unit) in enumerate(PARAMS, 1):
         r += 1
         v = p[key] * f if key else f
+        if sym.startswith("o") and sym[1:].isdigit():
+            v = 1 if sym[1:] in sel else 0
         _cell(ws, r, 1, k, align=Alignment(horizontal="center"))
         _cell(ws, r, 2, nm)
         _cell(ws, r, 3, sym, align=Alignment(horizontal="center"))
@@ -224,14 +232,58 @@ def export(p: dict, g: Geo, path: str):
          f"*({a1}+2*SQRT(TS_hc^2+(TS_hc*TS_m)^2)+({a1}+2*{dc}-TS_L)+1),0)",
          "Trải phẳng 1 tấm: (đáy + 2 mái + 2 dải gấp tới mép móng + 1) theo mỗi phương", "m2", True)
     line("", "Vữa M10 chân đế cột", "Vvua", "=TS_n*TS_bc^2*0.05", "n · b² · 0.05", "m3")
+    # đối trọng bê tông (mác = bê tông lót): theo từng ô bản 1..6 ở nửa móng ngược hướng phân giác / tuyến
+    oy = line("", "Đối trọng theo phương Y (néo dừng, B > L)", "dtY", "=IF(AND(TS_ht=2,TS_B>TS_L),1,0)",
+              "Néo góc: nửa +X (ngược mũi tên phân giác) ; néo dừng: nửa ngược hướng tuyến, theo cạnh dài", "")
+    on_ = line("", "Có đối trọng", "dtOn", "=IF(AND(TS_ht<>0,TS_hdt>0),1,0)", "Cột đỡ không có đối trọng", "")
+    lu = line("", "Nửa cạnh theo phương đặt đối trọng", "Lu", f"=IF({oy}=1,TS_B,TS_L)/2", "", "m")
+    du = line("", "Tim dầm theo phương đặt đối trọng", "du", f"=IF({oy}=1,TS_L2,TS_L1)/2", "", "m")
+    lv = line("", "Nửa cạnh phương còn lại", "Lv", f"=IF({oy}=1,TS_L,TS_B)/2", "", "m")
+    dv = line("", "Tim dầm phương còn lại", "dv", f"=IF({oy}=1,TS_L1,TS_L2)/2", "", "m")
+    tt = "(TS_bc/2-TS_a/2)"
+    hp = line("", "Vát nách nằm dưới 1/4 cổ móng (1 góc)", "hp",
+              f"=IF({tt}<=0,0,IF(2*{tt}<=TS_e,{tt}^2,IF({tt}>=TS_e,TS_e^2/2,TS_e^2/2-(TS_e-{tt})^2)))", "", "m2")
+    rp = line("", "Dầm nằm dưới 1/4 cổ móng (1 góc)", "rp", "=2*(TS_a/2)*(TS_bc/2)-(TS_a/2)^2", "", "m2")
+    hb = line("", "Chiều cao đối trọng dưới mặt đất", "hdtb", "=MIN(TS_hdt,MAX(0,TS_H1-TS_hs))", "", "m")
+    r += 1
+    for i, h in enumerate(["", "Ô bản (1, 3, 5: phía trong ; 2, 4, 6: phía ngoài)", "Chọn",
+                           "Phần bản (m2)", "Thể tích (m3)", "Dưới mặt đất (m3)", "Dầm + vát (m2)"], 1):
+        _cell(wk, r, i, h, bold=True, fill=HEAD, align=Alignment(horizontal="center", vertical="center", wrap_text=True))
+    cw0 = r + 1
+    for num, (iu, iv) in model.DT_CELLS.items():
+        r += 1
+        u0, u1 = ("0", du) if iu == "in" else (du, lu)
+        v0, v1 = {"top": (dv, lv), "mid": (f"-{dv}", dv), "bot": (f"-{lv}", f"-{dv}")}[iv]
+        wu, wv = f"({u1}-{u0})", f"({v1}-({v0}))"
+        n_ = 2 if iv == "mid" else 1
+        rr = f"(TS_a/2*{wv}+{n_}*TS_a/2*{wu}-{n_}*(TS_a/2)^2+{n_}*TS_e^2/2-{n_}*({rp}+{hp}))"
+        ss = f"({wu}*{wv}-{rr}-{n_}*(TS_bc/2)^2" + ("-TS_c^2/2)" if num == 3 else ")")
+        _cell(wk, r, 2, f"Ô {num}")
+        _cell(wk, r, 3, f"={on_}*IF(TS_dtm=0,1,TS_o{num})", "0")
+        _cell(wk, r, 4, f"={ss}", "0.000")
+        _cell(wk, r, 7, f"={rr}", "0.000")
+        _cell(wk, r, 5, f"=C{r}*(D{r}*TS_hdt+G{r}*MAX(0,TS_hdt-(TS_hd-TS_hs)))", "0.00")
+        _cell(wk, r, 6, f"=C{r}*(D{r}*{hb}+G{r}*MAX(0,{hb}-(TS_hd-TS_hs)))", "0.00")
+    cw1 = r
+    vdt = line("2a", f"Bê tông đối trọng {p['BTL']}", "Vdt", f"=SUM(E{cw0}:E{cw1})",
+               "Σ ô đã chọn: phần bản × hđt + phần dầm, vát × (hđt − (h − h1)) ; chừa lỗ, cổ móng", "m3", True)
+    vdtb = line("", "Đối trọng nằm dưới mặt đất", "Vdtb", f"=SUM(F{cw0}:F{cw1})", "", "m3")
+    line("", f"Tổng bê tông {p['BTL']} (lót + đối trọng)", "VB75", f"={vl}+{vdt}", "Vlot + Vdt", "m3", True)
 
     sec("C. ĐẤT, VÁN KHUÔN")
     vd = line(5, "Đào đất hố móng", "Vdao",
               f"=ROUND({hd}/6*({a1}*{b1}+{a2}*{b2}+({a1}+{a2})*({b1}+{b2})),2)",
               "Hình chóp cụt: Hd/6·(a1·b1 + a2·b2 + (a1+a2)(b1+b2))", "m3", True)
     vu = line("", "Thể tích móng nằm dưới mặt đất", "Vmd", f"={vb}-TS_n*TS_bc^2*TS_H2", "Vbt − n·b²·H2", "m3")
-    vdp = line(6, "Đắp đất hoàn trả hố móng", "Vdap", f"={vd}-{vu}-{vl}-{vc}", "Vdao − Vmd − Vlot − Vcat", "m3", True)
-    line(7, "Đất thừa (đắp ụ quanh cổ móng)", "Vthua", f"={vd}-{vdp}", "Vdao − Vdap", "m3", True)
+    vdp = line(6, "Đắp đất hoàn trả hố móng", "Vdap", f"={vd}-{vu}-{vl}-{vc}-{vdtb}",
+               "Vdao − Vmd − Vlot − Vcat − đối trọng dưới mặt đất", "m3", True)
+    vdd = line("6a", "Đất đắp thêm (đắp móng hđđ)", "Vdd",
+               "=IF(TS_hdd>0,TS_hdd/6*(TS_B*TS_L+(TS_B+2*TS_hdd)*(TS_L+2*TS_hdd)+(2*TS_B+2*TS_hdd)*(2*TS_L+2*TS_hdd))"
+               "-TS_n*TS_bc^2*TS_hdd,0)",
+               "Chóp cụt: mặt trên B·L, mái 1:1 ra ngoài (mặt dưới (B+2hđđ)(L+2hđđ)) − cổ móng trong lớp đắp", "m3",
+               True)
+    line(7, "Đất thừa (đắp ụ quanh cổ móng)", "Vthua", f"=MAX(0,{vd}-{vdp}-{vdd})",
+         "Vdao − Vdap − Vdd (âm thì 0: phải mua thêm đất)", "m3", True)
     line(8, "Ván khuôn móng", "VK",
          f"=2*(TS_B+TS_L)*TS_hs+4*TS_n*TS_bc*(TS_H1+TS_H2-TS_hd)+4*TS_c*TS_hs+16*SQRT(2)*TS_e*{hr}"
          f"+4*(TS_B-4*TS_e-2*TS_a)*{hr}+4*(TS_L-4*TS_e-2*TS_a)*{hr}+8*TS_a*{hr}",
@@ -499,7 +551,7 @@ def _summary(wb, p, g, rows, rdia, rtot):
     ws = wb.create_sheet("TONG KE", 0)
     K = "'KHOI LUONG'!"
     cols = [(f"{p['BTM']} (m³)", f"={K}{rows['Vbt']}", "0.00"),
-            (f"{p['BTL']} (m³)", f"={K}{rows['Vlot']}", "0.00"),
+            (f"{p['BTL']} (m³)", f"={K}{rows['VB75']}", "0.00"),
             ("Vữa M10 (m³)", f"={K}{rows['Vvua']}", "0.000")]
     for d in sorted(rdia):
         cols.append((f"Ø{d}", f"={K}$H${rdia[d]}", "0.00"))
@@ -510,6 +562,7 @@ def _summary(wb, p, g, rows, rdia, rtot):
     cols += [("BULONG NEO", model.bolt_text(p), None),
              ("Đào đất (m³)", f"={K}{rows['Vdao']}", "0.00"),
              ("Đắp đất (m³)", f"={K}{rows['Vdap']}", "0.00"),
+             *([("Đắp thêm (m³)", f"={K}{rows['Vdd']}", "0.00")] if p.get("HDD", 0) > 1e-6 else []),
              ("Ván khuôn (m²)", f"={K}{rows['VK']}", "0.00"),
              ("Rộng đền bù (m)", "=TS_B+2*0.5", "0.00"),
              ("Dài đền bù (m)", "=TS_L+2*0.5", "0.00"),

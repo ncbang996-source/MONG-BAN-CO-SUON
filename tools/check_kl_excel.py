@@ -24,12 +24,21 @@ CASES = {"mau": {}, "lon": BIG, "n7": dict(RD_N=7), "n10": dict(RD_N=10), "n8day
          "rc32": dict(RC_N=32, BB=1.0), "h2thap": dict(H2=1.4), "n11": dict(RD_N=11), "n4": dict(RD_N=4),
          "n5": dict(RD_N=5), "n9": dict(RD_N=9), "n12": dict(RD_N=12), "n13": dict(RD_N=13), "n14": dict(RD_N=14),
          "n16": dict(RD_N=16), "n18": dict(RD_N=18), "n12a7": dict(RD_N=12, A=0.7, BB=0.8),
-         "hep10": dict(RD_N=10, A=0.3, BB=0.5), "n16day": dict(RD_N=16, RD_ARR=1), "n11day": dict(RD_N=11, RD_ARR=1)}
+         "hep10": dict(RD_N=10, A=0.3, BB=0.5), "n16day": dict(RD_N=16, RD_ARR=1), "n11day": dict(RD_N=11, RD_ARR=1),
+         "dt1": dict(HT=1, HDT=0.5), "dt2": dict(HT=1, HDT=1.0, HDD=0.5), "dt3": dict(HT=2, HDT=0.8, DT_MODE=1, DT_SEL="136"),
+         "dt4": dict(HT=2, HDT=0.6, B=13, L=10, L1=4, L2=5, DT_MODE=1, DT_SEL="2456"), "dt5": dict(HT=0, HDT=0.5),
+         "dt6": dict(HT=1, HDT=0.9, H1=1.0, BB=1.2, E=0.1), "dd1": dict(HDD=0.8), "dtlon": dict(BIG, HDT=1.0, HDD=0.8)}
+# khối lượng bê tông / đất: ký hiệu ở cột C của sheet KHOI LUONG -> hàm trong model
+VOLS = {"Vbt": model.vol_mong, "Vlot": model.vol_lot, "Vcat": model.vol_cat, "Vdao": model.vol_dao,
+        "Vdap": model.vol_dap, "Vdd": model.vol_dd, "Vthua": model.vol_thua, "Vdt": model.vol_dt,
+        "Vdtb": lambda p: model.vol_dt(p, below=True), "VK": model.area_vk, "Svai": model.area_vai}
 base, _ = model.read_excel(os.path.join(ROOT, "samples", "D122-42_MB4-10x12-2.5.xlsm"))
 geos = {}
+params = {}
 for nm, ov in CASES.items():
     p = dict(base)
-    p.update({k: float(v) for k, v in ov.items()})
+    p.update({k: (v if isinstance(v, str) else float(v)) for k, v in ov.items()})
+    params[nm] = p
     p["SCALE"] = model.auto_scale(p)
     g = Geo(p)
     g.calc_kl()
@@ -55,6 +64,11 @@ for nm, g in geos.items():
             errs.append(f"{pos}: Excel Ø{d} L={ln} n={q} | chương trình Ø{e['dia']} L={e['len']:.0f} n={e['n']}")
         elif not e and q:
             errs.append(f"{pos}: Excel n={q}, chương trình không có")
+    vals = {row[2].value: row[4].value for row in ws.iter_rows() if row[2].value in VOLS}
+    for sym, fn in VOLS.items():
+        want = fn(params[nm])
+        if sym not in vals or vals[sym] is None or abs(float(vals[sym]) - want) > 0.02:
+            errs.append(f"{sym}: Excel {vals.get(sym)} | chương trình {want:.3f}")
     print(f"{nm:8s} {'OK' if not errs else 'SAI'}")
     for x in errs:
         print("    ", x)

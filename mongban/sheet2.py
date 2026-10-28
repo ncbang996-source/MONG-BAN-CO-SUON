@@ -399,12 +399,20 @@ def mesh(c: Ctx, g: Geo, co: Callouts, cx, cy):
 
 
 # ---------------------------------------------------------------------------
+def bb_hmax(g: Geo):
+    """Chiều cao giấy tối đa của B-B; có mặt bằng đối trọng bên dưới thì chừa chỗ cho nó (đáy B-B = 245 − cao)."""
+    if not model.dt_selected(g.p):
+        return 105.0
+    return min(105.0, 123.0 - g.p["B"] * 500.0 / g.den)
+
+
 def bb_scale(g: Geo):
-    for d in (50, 75, 100, 125, 150):
+    hmax = bb_hmax(g)
+    for d in (50, 75, 100, 125, 150, 200):
         k = 1000.0 / d
-        if k * g.Lh <= 122.0 and k * (g.H + model.TL) <= 105.0:
+        if k * g.Lh <= 122.0 and k * (g.H + model.TL) <= hmax:
             return d
-    return 150
+    return 200
 
 
 def half_bb(c: Ctx, g: Geo, co: Callouts, xax, ytop):
@@ -555,5 +563,14 @@ def draw(c: Ctx, g: Geo):
     with c.group("sec55", "Mặt cắt 5-5"):
         pier_section(c, g, co, 214.0, 165.0)
     tables.summary(c, g, 405.0, 98.0)
-    note_at(c, 268.0, min(ybb, 125.0), ["- XEM GHI CHÚ CHUNG TẠI BẢN VẼ SỐ: " + str(g.p.get("CODE", "")),
-                                         "- KÍCH THƯỚC GHI TRÊN BẢN VẼ TÍNH BẰNG mm."])
+    notes = ["- XEM GHI CHÚ CHUNG TẠI BẢN VẼ SỐ: " + str(g.p.get("CODE", "")),
+             "- KÍCH THƯỚC GHI TRÊN BẢN VẼ TÍNH BẰNG mm."]
+    if model.dt_selected(g.p):
+        # mặt bằng đối trọng ở chỗ ghi chú, ghi chú chuyển xuống dưới mặt cắt 5-5
+        from .sheet1 import dt_plan
+        with c.group("dtplan", "Mặt bằng đối trọng"):
+            k2 = 1000.0 / (2 * g.den)
+            dt_plan(c, g, 270.0 + k2 * g.Lh, min(ybb, 178.0) - 6.0 - g.Bh * k2, side=True)
+        note_at(c, 172.0, 120.0, notes)
+    else:
+        note_at(c, 268.0, min(ybb, 125.0), notes)

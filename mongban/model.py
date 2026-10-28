@@ -60,6 +60,8 @@ def default_params() -> dict:
         "RL_D": 8.0, "RL_S": 100.0, "RL_N": 2.0,
         "RD_D": 25.0, "RD_N": 8.0, "RDT_D": 8.0, "RDT_S": 200.0, "RDP_D": 8.0, "RDP_S": 400.0,
         "TL_D": 25.0, "TL_S": 300.0,
+        "DT_MODE": 0.0,     # đối trọng: 0 = 1/2 diện tích móng, 1 = chọn ô bản
+        "DT_SEL": "123456",  # các ô bản đặt đối trọng (khi DT_MODE = 1)
         "RD_ARR": 0.0,      # thép chủ dầm nhiều hàng (hàng dưới > 2 thanh): 0 = các hàng đều nhau, 1 = xếp đầy hàng ngoài
         "COVER": 0.075, "COVER_B": 0.075,
         # khung tên
@@ -194,7 +196,105 @@ def vol_cat(p) -> float:
 
 
 def vol_dap(p) -> float:
-    return vol_dao(p) - (vol_mong(p) - vol_above(p)) - vol_lot(p) - vol_cat(p)
+    """Đắp đất hoàn trả hố móng (trừ phần đối trọng nằm dưới mặt đất)."""
+    return vol_dao(p) - (vol_mong(p) - vol_above(p)) - vol_lot(p) - vol_cat(p) - vol_dt(p, below=True)
+
+
+def vol_dd(p) -> float:
+    """Đất đắp thêm (đắp móng hđđ): mặt trên B x L, mái 1:1 ra ngoài, trừ cổ móng nằm trong lớp đắp."""
+    h = p.get("HDD", 0.0)
+    if h <= 1e-6:
+        return 0.0
+    return _frustum(h, p["B"], p["L"], p["B"] + 2 * h, p["L"] + 2 * h) - NPIER * p["BB"] ** 2 * h
+
+
+def vol_thua(p) -> float:
+    """Đất thừa = đào − đắp hoàn trả − đắp thêm (âm -> 0: phải mua thêm đất)."""
+    return max(0.0, vol_dao(p) - vol_dap(p) - vol_dd(p))
+
+
+# ---------------------------------------------------------------------------
+# đối trọng bê tông (hđt): đặt trên mặt bản, ở nửa móng ngược hướng mũi tên phân giác (néo góc) / hướng tuyến
+# (néo dừng, theo phương cạnh dài); cột đỡ không có. Ô bản 1..6 (theo nửa móng, u: ra xa tim, v: ngang):
+#   1 = trong-trên, 2 = ngoài-trên, 3 = trong-giữa (có lỗ), 4 = ngoài-giữa, 5 = trong-dưới, 6 = ngoài-dưới.
+DT_CELLS = {1: ("in", "top"), 2: ("out", "top"), 3: ("in", "mid"), 4: ("out", "mid"), 5: ("in", "bot"),
+            6: ("out", "bot")}
+DT_MODES = ["1/2 diện tích móng", "Chọn ô bản"]
+
+
+def dt_orient(p):
+    """'x': đối trọng ở nửa +X ; 'y': nửa +Y ; None: không có (cột đỡ hoặc hđt = 0)."""
+    ht = int(p.get("HT", 0))
+    if p.get("HDT", 0.0) <= 1e-6 or ht == 0:
+        return None
+    if ht == 2 and p["B"] > p["L"] + 1e-9:
+        return "y"
+    return "x"
+
+
+def dt_frame(p, orient=None):
+    """(Lu, du, Lv, dv): nửa cạnh và tim dầm theo phương u (ra xa tim móng) và v."""
+    orient = orient or dt_orient(p) or "x"
+    if orient == "y":
+        return p["B"] / 2, p["L2"] / 2, p["L"] / 2, p["L1"] / 2
+    return p["L"] / 2, p["L1"] / 2, p["B"] / 2, p["L2"] / 2
+
+
+def dt_cell_rect(p, num, orient=None):
+    """Ô bản num trong hệ (u, v), mép là tim dầm / tim móng / mép móng."""
+    Lu, du, Lv, dv = dt_frame(p, orient)
+    iu, iv = DT_CELLS[num]
+    u0, u1 = (0.0, du) if iu == "in" else (du, Lu)
+    v0, v1 = {"top": (dv, Lv), "mid": (-dv, dv), "bot": (-Lv, -dv)}[iv]
+    return u0, u1, v0, v1
+
+
+def dt_parts(p, num):
+    """Diện tích các phần của ô bản: S (chỉ có bản), R (dầm + vát nách, ngoài cổ móng), P (cổ móng), H (lỗ)."""
+    a, e, bc, c = p["A"], p["E"], p["BB"], p["C"]
+    u0, u1, v0, v1 = dt_cell_rect(p, num)
+    iu, iv = DT_CELLS[num]
+    nu = 2 if iv == "mid" else 1             # số nửa dầm theo phương u nằm trong ô
+    nc = 2 if iv == "mid" else 1             # số góc giao dầm (cổ móng, vát) chạm ô
+    area = (u1 - u0) * (v1 - v0)
+    rib = a / 2 * (v1 - v0) + nu * a / 2 * (u1 - u0) - nc * (a / 2) ** 2
+    hau = nc * e * e / 2
+    t = bc / 2 - a / 2
+    if t <= 0:
+        hp = 0.0
+    elif 2 * t <= e:
+        hp = t * t
+    elif t >= e:
+        hp = e * e / 2
+    else:
+        hp = e * e / 2 - (e - t) ** 2
+    rp = 2 * (a / 2) * (bc / 2) - (a / 2) ** 2           # phần dầm nằm dưới 1/4 cổ móng
+    R = rib + hau - nc * (rp + hp)
+    P = nc * (bc / 2) ** 2
+    H = c * c / 2 if num == 3 else 0.0
+    return dict(A=area, S=area - R - P - H, R=R, P=P, H=H)
+
+
+def dt_selected(p):
+    if dt_orient(p) is None:
+        return []
+    if int(p.get("DT_MODE", 0)) == 0:
+        return list(DT_CELLS)
+    return sorted({int(ch) for ch in str(p.get("DT_SEL", "")) if ch in "123456"})
+
+
+def vol_dt(p, below=False) -> float:
+    """Thể tích bê tông đối trọng: phần bản cao hđt, phần trên dầm / vát cao (hđt − (h − h1)), chừa lỗ và cổ móng.
+    below = True: chỉ phần nằm dưới mặt đất tự nhiên."""
+    h = p.get("HDT", 0.0)
+    if below:
+        h = min(h, max(0.0, p["H1"] - p["HS"]))
+    hr = p["HD"] - p["HS"]
+    v = 0.0
+    for num in dt_selected(p):
+        q = dt_parts(p, num)
+        v += q["S"] * h + q["R"] * max(0.0, h - hr)
+    return v
 
 
 def area_vk(p) -> float:
@@ -245,8 +345,10 @@ def validate(p) -> str | None:
         return "Lỗ mở c và vát nách e không được âm (nhập 0 nếu không có)."
     if p["HC"] < 0:
         return "Dày đệm cát không được âm (nhập 0 nếu không có)."
-    if p["HDD"] > 1e-6 or p["HDT"] > 1e-6:
-        return "Chương trình chưa hỗ trợ đắp móng (hđđ) / đối trọng (hđt): nhập 0."
+    if p["HDD"] < 0 or p["HDT"] < 0:
+        return "Chiều cao đắp móng hđđ và đối trọng hđt không được âm (nhập 0 nếu không có)."
+    if p["HDD"] >= p["H2"] - 1e-6:
+        return "Chiều cao đắp móng hđđ phải nhỏ hơn H2 (cổ móng phải nhô lên khỏi mặt đắp)."
     if p["SLOPE"] < 1e-6:
         return "Hệ số mở mái phải > 0."
     if p["MPIT"] < ML:
@@ -302,6 +404,13 @@ def rib_rows(n, m, arr):
 def warnings(p) -> list:
     """Cảnh báo (không chặn dựng bản vẽ): khoảng hở ngang giữa các thanh thép chủ < 40 mm."""
     out = []
+    if p.get("HDT", 0.0) > 1e-6:
+        if int(p.get("HT", 0)) == 0:
+            out.append("Cột đỡ không bố trí đối trọng: bỏ qua hđt.")
+        elif not dt_selected(p):
+            out.append("Chưa chọn ô bản nào để đặt đối trọng.")
+        elif p["HS"] + p["HDT"] > p["H1"] + 1e-6:
+            out.append("Đối trọng nhô lên khỏi mặt đất tự nhiên.")
     try:
         m = 1 + int(round(p["RC_N"])) // 4
         d = p["RC_D"] / 1000.0

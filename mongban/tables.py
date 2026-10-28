@@ -157,7 +157,7 @@ def summary_cols(g):
     cls = [x for x in g.klc if x[2] > 1e-6]
     tot = sum(x[2] for x in cls)
     cols = [(p["BTM"], "(m3)", 14.0, f"{model.vol_mong(p):.2f}"),
-            (p["BTL"], "(m3)", 13.0, f"{model.vol_lot(p):.2f}")]
+            (p["BTL"], "(m3)", 13.0, f"{model.vol_lot(p) + model.vol_dt(p):.2f}")]   # lót + đối trọng
     for d, _, w in cls:
         cols.append((f"%%C{int(d + 0.5)}", "(kg)", 14.0, f"{w:.2f}"))
     if cls:

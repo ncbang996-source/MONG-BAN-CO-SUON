@@ -31,3 +31,11 @@ kl_excel.export(p, res.geo, os.path.join(d, "kl.xlsx"))
 p2 = dict(p, GD="TKCS")
 assert len(export.build(p2).origins) == 1
 print("OK - Excel khoi luong, TKCS")
+# đắp móng hđđ, đối trọng hđt (néo góc: 1/2 móng; chọn ô bản); hình học đối trọng đã đối chiếu bằng shapely
+p3 = dict(p, HT=1, HDT=0.5, HDD=0.5)
+assert abs(model.vol_dt(p3) - 24.255) < 0.001 and abs(model.vol_dd(p3) - 64.687) < 0.001
+assert abs(model.vol_dt(dict(p3, DT_MODE=1, DT_SEL="136")) - 10.25) < 0.01
+assert model.vol_dt(dict(p3, HT=0)) == 0.0
+res3 = export.build(dict(p3, DT_MODE=1, DT_SEL="2346"))
+assert export.pdf_bytes(res3)[:4] == b"%PDF"
+print("OK - dap mong, doi trong")

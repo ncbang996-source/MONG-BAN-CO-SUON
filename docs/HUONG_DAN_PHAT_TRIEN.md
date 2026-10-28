@@ -198,6 +198,15 @@ Nguyên tắc:
   - Thép chủ neo chân 500 (cố định). Khoảng hở thép chủ < 40 mm thì cảnh báo.
   - Đai phụ giữ các thanh cách nhau ≤ 400 mm. Mặt cắt 5-5 ghi tổng số thanh, đai phụ ghi "SO LE".
 - **Thang leo:** đặt ở 2 trụ chéo nhau khi H2 > 1,5 m.
+- **Đắp móng (hđđ):** mặt trên phủ đúng B × L, mái 1:1 ra ngoài; ghi "ĐẤT ĐẮP THÊM", kích thước hđđ ở chuỗi trái.
+  Khối lượng theo chóp cụt trừ cổ móng; đất thừa giảm tương ứng (âm thì 0).
+- **Đối trọng (hđt):**
+  - Chỉ cột néo góc / néo dừng. Nửa móng ngược hướng mũi tên phân giác (néo góc) / hướng tuyến (néo dừng: mũi tên
+    theo phương cạnh dài).
+  - "1/2 diện tích móng" hoặc chọn ô bản 1–6 (mỗi ô tính tới tim dầm). Cao hđt từ mặt bản, trùm dầm khi hđt > h − h1,
+    chừa lỗ, cổ móng. Thể tích theo hình thật (công thức giải tích, đã đối chiếu shapely), cộng vào bê tông lót,
+    trừ vào đắp hoàn trả.
+  - Vẽ "MẶT BẰNG ĐỐI TRỌNG" tỷ lệ gấp đôi số tỷ lệ mặt bằng chính, không vẽ thép, không vẽ trên các mặt cắt.
 - **Khối lượng:**
   - Vải địa tính theo cách trải phẳng 1 tấm chữ nhật. Mái hố đào vẽ 1:0,5.
   - Hệ số mái trong Excel chỉ dùng để tính khối lượng.

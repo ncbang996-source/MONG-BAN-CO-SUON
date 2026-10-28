@@ -5,3 +5,4 @@ pillow>=10
 fonttools>=4.40
 numpy>=1.26
 pyinstaller>=6.6
+shapely>=2.0

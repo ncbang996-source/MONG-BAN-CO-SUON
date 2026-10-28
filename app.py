@@ -88,6 +88,7 @@ DIM_FIELDS = [
     ("H1", "H1 - chôn sâu (m)"), ("H2", "H2 - cao trên mặt đất (m)"),
     ("HC", "Dày đệm cát (m)"), ("SLOPE", "Hệ số mở mái (tính KL)"),
     ("MPIT", "Mở rộng đáy hố đào (m)"),
+    ("HDD", "hđđ - chiều cao đắp móng (m)"), ("HDT", "hđt - chiều cao đối trọng (m)"),
 ]
 # (nhãn, khoá Ø, khoá bước / số thanh, tiêu đề cột 2)
 REBAR_FIELDS = [
@@ -409,6 +410,37 @@ class App(tk.Tk):
         head("2. Kích thước")
         for k, lbl in DIM_FIELDS:
             row(lbl, k, 8)
+        # đối trọng: 1/2 diện tích móng hoặc chọn ô bản 1..6
+        ttk.Label(body, text="Vị trí đối trọng").grid(row=r, column=0, sticky="w", padx=(10, 4), pady=1)
+        ttk.Combobox(body, textvariable=self._var("DT_MODE"), values=model.DT_MODES, width=18,
+                     state="readonly").grid(row=r, column=1, columnspan=3, sticky="w", pady=1)
+        r += 1
+        ttk.Label(body, text="Ô bản đặt đối trọng").grid(row=r, column=0, sticky="w", padx=(10, 4), pady=1)
+        fr = ttk.Frame(body)
+        fr.grid(row=r, column=1, columnspan=3, sticky="w")
+        sel = self._var("DT_SEL")
+        self.v_dtc = []
+        self.cb_dtc = []
+
+        def upd_sel():
+            if not getattr(self, "_filling", False):
+                sel.set("".join(str(i + 1) for i, b in enumerate(self.v_dtc) if b.get()))
+        for i in range(6):
+            b = tk.BooleanVar(value=True)
+            cb = ttk.Checkbutton(fr, text=str(i + 1), variable=b, command=upd_sel)
+            cb.pack(side="left", padx=(0, 4))
+            self.v_dtc.append(b)
+            self.cb_dtc.append(cb)
+
+        def mode_state(*_):
+            st = "normal" if self.vars["DT_MODE"].get() == model.DT_MODES[1] else "disabled"
+            for cb in self.cb_dtc:
+                cb.configure(state=st)
+        self.vars["DT_MODE"].trace_add("write", mode_state)
+        r += 1
+        ttk.Label(body, text="1, 3, 5: phía trong ; 2, 4, 6: phía ngoài", style="Sub.TLabel",
+                  wraplength=200).grid(row=r, column=1, columnspan=2, sticky="w")
+        r += 1
         head("3. Cốt thép (mm)")
         ttk.Label(body, text="Ø").grid(row=r, column=1, sticky="w")
         ttk.Label(body, text="@ / số thanh").grid(row=r, column=2, sticky="w")
@@ -454,6 +486,13 @@ class App(tk.Tk):
                 v.set(["Đỡ", "Néo góc", "Néo dừng"][int(p["HT"])])
             elif k == "RD_ARR":
                 v.set(model.ARR_NAMES[1 if int(p.get("RD_ARR", 0)) else 0])
+            elif k == "DT_MODE":
+                v.set(model.DT_MODES[1 if int(p.get("DT_MODE", 0)) else 0])
+            elif k == "DT_SEL":
+                st = str(p.get("DT_SEL", "123456"))
+                v.set(st)
+                for i, b in enumerate(self.v_dtc):
+                    b.set(str(i + 1) in st)
             elif k in ("COVER", "COVER_B"):
                 v.set(f"{p[k] * 1000:g}")
             elif k in ("SCALE",):
@@ -475,6 +514,10 @@ class App(tk.Tk):
                 p["HT"] = {"đỡ": 0, "néo góc": 1, "néo dừng": 2}.get(s.lower(), model.ht_from_string(s))
             elif k == "RD_ARR":
                 p["RD_ARR"] = 1.0 if s == model.ARR_NAMES[1] else 0.0
+            elif k == "DT_MODE":
+                p["DT_MODE"] = 1.0 if s == model.DT_MODES[1] else 0.0
+            elif k == "DT_SEL":
+                p["DT_SEL"] = "".join(ch for ch in s if ch in "123456")
             elif k in ("COVER", "COVER_B"):
                 p[k] = float(s.replace(",", ".")) / 1000.0
             elif k == "SCALE":
@@ -511,6 +554,11 @@ class App(tk.Tk):
                 g = Geo(p)
                 g.rib_bars()
                 info += "\nThép chủ dầm mỗi mặt: " + " + ".join(str(len(r)) for _, r in g.rows_t) + " thanh"
+                if model.dt_selected(p):
+                    info += (f"\nĐối trọng: ô {', '.join(map(str, model.dt_selected(p)))} - "
+                             f"{model.vol_dt(p):.2f} m3 bê tông {p['BTL']}")
+                if p.get("HDD", 0) > 1e-6:
+                    info += f"\nĐất đắp thêm: {model.vol_dd(p):.2f} m3 ; đất thừa: {model.vol_thua(p):.2f} m3"
             except Exception:
                 pass
             self.l_info.config(text=info)

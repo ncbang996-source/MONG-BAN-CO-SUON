@@ -15,6 +15,14 @@ App Windows chạy offline, vẽ nhanh bản vẽ **móng bản có dầm (móng
 - **Mô hình 3D:** tab riêng trong khung xem, bê tông trong suốt, bật/tắt từng nhóm thép, cắt 1/4 móng.
 - **Sắp xếp (kéo thả):** giống app cũ. Vị trí lưu vào `<tên Excel>.layout.json`.
 
+## Đắp móng, đối trọng
+- **Đắp móng (K36, hđđ):** lớp đất đắp thêm cao hđđ, mặt trên phủ đúng B × L, mái 1:1 ra ngoài. Mặt cắt A-A ghi "ĐẤT ĐẮP THÊM", kích thước hđđ ở chuỗi bên trái. Khối lượng tính theo khối chóp cụt, trừ cổ móng. Đất thừa giảm tương ứng (âm thì 0).
+- **Đối trọng (K37, hđt):** bê tông cùng mác bê tông lót, không cốt thép, chỉ có ở cột néo góc / néo dừng.
+  - Đặt ở nửa móng ngược hướng mũi tên phân giác (néo góc) hoặc hướng tuyến (néo dừng, mũi tên theo phương cạnh dài).
+  - Chọn "1/2 diện tích móng" (cả 6 ô) hoặc "Chọn ô bản" 1–6 (1, 3, 5 phía trong; 2, 4, 6 phía ngoài).
+  - Cao hđt tính từ mặt bản, trùm lên dầm khi hđt > h − h1, chừa lỗ và cổ móng. Thể tích tính theo hình thật, cộng vào bê tông lót, trừ vào đắp hoàn trả.
+  - Bản vẽ: "MẶT BẰNG ĐỐI TRỌNG" tỷ lệ gấp đôi số tỷ lệ mặt bằng chính, không vẽ thép.
+
 ## Ô đọc từ sheet TONG HOP
 | Ô | Thông số | Ô | Thông số |
 |---|---|---|---|
@@ -24,7 +32,7 @@ App Windows chạy offline, vẽ nhanh bản vẽ **móng bản có dầm (móng
 | K13, K14 | a: rộng dầm, h: cao dầm (tính cả bản) | K16 | h1: dày bản |
 | K17 | c: cạnh lỗ mở ở tim móng | K18 | e: cạnh vát nách chỗ giao dầm |
 | K20 | b: cạnh cổ móng | K28, K30 | H1: chôn sâu, H2: cao trên mặt đất |
-| K34, K35 | Lớp bảo vệ đáy / còn lại (mm) | K36, K37 | hđđ, hđt (chưa hỗ trợ, phải bằng 0) |
+| K34, K35 | Lớp bảo vệ đáy / còn lại (mm) | K36, K37 | hđđ: chiều cao đắp móng, hđt: chiều cao đối trọng |
 | K39, K40, K41 | Đệm cát, hệ số mái, mở rộng đáy hố | K42 + L42 | Bu lông neo |
 | C44 / D44, D45 | Thép bản: Ø / bước (cm) ở ô 2 cạnh và ô 4 cạnh ngàm | I44 / J44, J45 | Thép chống: Ø / bước (cm) |
 | C48 / D48 | Thép chủ cổ móng: Ø / số thanh | C49..D51, F51 | Đai cổ, đai phụ cổ, lưới đầu trụ, số lớp |

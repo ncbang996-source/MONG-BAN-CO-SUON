@@ -11,6 +11,7 @@ from .view import (V, Callouts, arrow2, bolt_side, bolts_plan, cut_line, elev, m
 
 T_SOIL = "ĐẤT THỪA ĐẮP LẠI"
 T_FILL = "ĐẤT ĐẮP ĐẦM CHẶT"
+T_FILLPLUS = "ĐẤT ĐẮP THÊM"
 T_AXIS = "TIM MÓNG"
 T_CUSHION = "ĐỆM CÁT - DÀY "
 T_GEO = "VẢI ĐỊA KỸ THUẬT"
@@ -177,8 +178,27 @@ def draw_section(c: Ctx, g: Geo):
     elev(c, g.dimX2 - 5.4, g.ytop, f"+{fx(p['H2'], 2)}m")
     if g.hasCushion:
         elev(c, g.dimX2 - 17.4, g.ylb, f"-{fx(p['H1'] + model.TL + p['HC'], 2)}m")
-    # đất đắp: ụ đất thừa giữa 2 cổ móng (khi mặt dầm không cao hơn mặt đất)
-    if p["H1"] >= g.hd - 1e-6:
+    hdd = p.get("HDD", 0.0)
+    if hdd > 1e-6:
+        # đắp móng: lớp đất đắp thêm cao hđđ phủ mặt móng, mái 1:1 ra ngoài phạm vi móng
+        yf = ygl + k * hdd
+        xs = [cx - k * (g.Lh + hdd), cx - k * g.Lh]
+        c.ln("HINH THUC", xs[0], ygl, xs[1], yf)
+        c.ln("HINH THUC", 2 * cx - xs[0], ygl, 2 * cx - xs[1], yf)
+        edges = [cx - k * g.Lh]
+        for s_ in (-1, 1):
+            edges += [cx + k * (s_ * g.dx - g.bb / 2), cx + k * (s_ * g.dx + g.bb / 2)]
+        edges.append(cx + k * g.Lh)
+        for i in range(0, len(edges), 2):
+            c.ln("HINH THUC", edges[i], yf, edges[i + 1], yf)
+        xl = cx - k * (g.dx + g.bb / 2) - 2.5
+        with c.item("fillplus", "Ghi chú đất đắp thêm"):
+            w = txtw(T_FILLPLUS, 2.0)
+            yt = yf + 4.2
+            c.pl("CHU", False, [(xl, ygl + 0.5 * k * hdd), (xl - 4.2, yt), (xl - 4.7 - w, yt)], fixed=(0,))
+            c.tx("CHU", xl - 4.6 - w, yt + 0.8, 2.0, T_FILLPLUS)
+    # đất đắp: ụ đất thừa giữa 2 cổ móng (khi mặt dầm không cao hơn mặt đất, không đắp móng)
+    elif p["H1"] >= g.hd - 1e-6:
         pa = ygl + 3.1
         sx = cx - k * g.Lh
         xi = cx - k * (g.dx + g.bb / 2)
@@ -234,7 +254,13 @@ def dim_section(c: Ctx, g: Geo):
     xa = g.xgl - 3.0
     # bên trái: H1, H2 (ngoài); bản, dầm, cổ (trong)
     c.dimV("DIM", (xa, g.ygl), (xa, g.ybase), g.dimX1)
-    c.dimV("DIM", (xa, g.ygl), (xa, g.ytop), g.dimX1)
+    hdd = p.get("HDD", 0.0)
+    if hdd > 1e-6:                       # đắp móng: H2 chia thành hđđ + phần cổ nhô trên mặt đắp
+        yf = g.ygl + k * hdd
+        c.dimV("DIM", (xa, g.ygl), (xa, yf), g.dimX1)
+        c.dimV("DIM", (xa, yf), (xa, g.ytop), g.dimX1)
+    else:
+        c.dimV("DIM", (xa, g.ygl), (xa, g.ytop), g.dimX1)
     # đường gióng chỉ kéo tới gần mép miệng hố (không chạy vào trong hình)
     c.dimV("DIM", (xa, g.ybase), (xa, g.ybase + k * g.hs), g.dimX2)
     c.dimV("DIM", (xa, g.ybase + k * g.hs), (xa, g.ybase + k * g.hd), g.dimX2)
@@ -333,7 +359,7 @@ def plan_outline(c: Ctx, g: Geo, v: V, bolts=True, lot=True):
 
 def draw_route(c: Ctx, g: Geo, cx, cy, lh, lx, k=None):
     """Hướng tuyến đi qua tim móng (quy ước app cũ): đỡ - 2 chiều theo Y; néo góc - 2 tia lệch 10°,
-    phân giác hướng sang trái; néo dừng - 1 chiều."""
+    phân giác hướng sang trái; néo dừng - 1 chiều theo phương cạnh dài (sang trái / xuống dưới)."""
     ht = int(g.p["HT"])
     wr = txtw(T_ROUTE, 2.0)
     a = max(4.6 + wr / 2, min(0.5 * lh, lh - 2.4 - wr / 2))
@@ -349,9 +375,18 @@ def draw_route(c: Ctx, g: Geo, cx, cy, lh, lx, k=None):
         c.txr("CHU", cx - a * sn - 2.4 * cs, cy + a * cs - 2.4 * sn, 2.0, T_ROUTE, 90.0 + 10.0)
         vee(c, cx, cy, cx - lx, cy)
         c.tx("CHU", cx - lx + 1.0, cy + 1.2, 2.0, T_BISECT)
-    elif ht == 2:
-        vee(c, cx, cy, cx, cy - lh)
-        c.txr("CHU", cx - 2.4, cy - a, 2.0, T_ROUTE, 90.0)
+    elif ht == 2:                         # néo dừng: 1 chiều theo phương cạnh dài
+        if g.Lh >= g.Bh - 1e-9:
+            ax = max(4.6 + wr / 2, min(0.5 * lx, lx - 2.4 - wr / 2))
+            if k:
+                z0 = k * (g.dx + g.a / 2) + 1.0
+                if lx - 1.0 - z0 >= wr + 1.0:
+                    ax = 0.5 * (z0 + lx - 1.0)
+            vee(c, cx, cy, cx - lx, cy)
+            c.txj("CHU", cx - ax, cy + 1.2, 2.0, T_ROUTE, 1)
+        else:
+            vee(c, cx, cy, cx, cy - lh)
+            c.txr("CHU", cx - 2.4, cy - a, 2.0, T_ROUTE, 90.0)
     else:
         vee(c, cx, cy, cx, cy - lh)
         vee(c, cx, cy, cx, cy + lh)
@@ -442,6 +477,94 @@ def draw_plan(c: Ctx, g: Geo, detail: bool):
         plan_bars(c, g, v)
     dim_plan(c, g, v)
     title(c, cx, v.y(-g.Bh) - 28.5, "MẶT BẰNG MÓNG", f"TL:1/{g.den}")
+
+
+def dt_region(g: Geo):
+    """Vùng đối trọng trên mặt bằng (toạ độ móng, m): hợp các ô bản đã chọn, chừa lỗ, cổ móng;
+    hđt không vượt quá phần dầm nhô lên thì chừa cả dầm và vát nách. Trả về shapely geometry hoặc None."""
+    from shapely.geometry import Polygon, box
+    from shapely.ops import unary_union
+    p = g.p
+    sel = model.dt_selected(p)
+    if not sel:
+        return None
+    o = model.dt_orient(p)
+    tr = (lambda u, v: (u, v)) if o == "x" else (lambda u, v: (-v, u))
+    cells = []
+    for n in sel:
+        u0, u1, v0, v1 = model.dt_cell_rect(p, n)
+        cells.append(Polygon([tr(u0, v0), tr(u1, v0), tr(u1, v1), tr(u0, v1)]))
+    reg = unary_union(cells)
+    a, e, bb = g.a, g.e, g.bb
+    cut = [box(sx * g.dx - bb / 2, sy * g.dy - bb / 2, sx * g.dx + bb / 2, sy * g.dy + bb / 2)
+           for sx in (-1, 1) for sy in (-1, 1)]
+    if g.hasHole:
+        cut.append(box(-g.c / 2, -g.c / 2, g.c / 2, g.c / 2))
+    if p["HDT"] <= g.hd - g.hs + 1e-9:       # đối trọng thấp hơn mặt dầm: chỉ đổ trong ô bản
+        cut += [box(s * g.dx - a / 2, -g.Bh, s * g.dx + a / 2, g.Bh) for s in (-1, 1)]
+        cut += [box(-g.Lh, s * g.dy - a / 2, g.Lh, s * g.dy + a / 2) for s in (-1, 1)]
+        if g.hasHaunch:
+            for sx in (-1, 1):
+                for sy in (-1, 1):
+                    for qx in (-1, 1):
+                        for qy in (-1, 1):
+                            x0, y0 = sx * g.dx + qx * a / 2, sy * g.dy + qy * a / 2
+                            cut.append(Polygon([(x0, y0), (x0 + qx * e, y0), (x0, y0 + qy * e)]))
+    reg = reg.difference(unary_union(cut))
+    return None if reg.is_empty else reg
+
+
+def dt_plan(c: Ctx, g: Geo, cx, cy, side=False):
+    """Mặt bằng đối trọng: tỷ lệ gấp đôi số tỷ lệ mặt bằng chính, không vẽ thép.
+    side = True: tên hình đặt bên phải (chỗ thấp), ngược lại đặt bên dưới."""
+    reg = dt_region(g)
+    if reg is None:
+        return
+    p = g.p
+    den = 2 * g.den
+    v = V(c, cx, cy, den)
+    L, B = g.Lh, g.Bh
+    polys = list(getattr(reg, "geoms", [reg]))
+    for pg in polys:
+        ext = [v.P(*q) for q in list(pg.exterior.coords)[:-1]]
+        holes = [[v.P(*q) for q in list(h.coords)[:-1]] for h in pg.interiors]
+        c.hatch("HATCH", ext, "AR-CONC", 0.6 * v.k / 10.0, holes=holes)
+        c.pl("HINH THUC", True, ext)
+        for h in holes:
+            c.pl("HINH THUC", True, h)
+    plan_outline(c, g, v, bolts=False, lot=False)
+    for s_ in (-1, 1):
+        v.ln("TRUC", s_ * g.dx, -B - 0.4, s_ * g.dx, B + 0.4)
+        v.ln("TRUC", -L - 0.4, s_ * g.dy, L + 0.4, s_ * g.dy)
+    v.ln("TRUC", -L - 0.4, 0.0, L + 0.4, 0.0)
+    v.ln("TRUC", 0.0, -B - 0.4, 0.0, B + 0.4)
+    # kích thước: tim dầm + tổng
+    yb = v.y(-B)
+    for x1, x2 in ((-L, -g.dx), (-g.dx, 0.0), (0.0, g.dx), (g.dx, L)):
+        v.dimH((x1, -B), (x2, -B), yb - 5.0)
+    v.dimH((-L, -B), (L, -B), yb - 10.0)
+    xl = v.x(-L)
+    for y1, y2 in ((-B, -g.dy), (-g.dy, g.dy), (g.dy, B)):
+        v.dimV((-L, y1), (-L, y2), xl - 5.0)
+    v.dimV((-L, -B), (-L, B), xl - 10.0)
+    # ghi chú
+    big = max(polys, key=lambda q: q.area)
+    q = big.representative_point()
+    pt = v.P(q.x, q.y)
+    t1 = f"ĐỐI TRỌNG BÊ TÔNG {p['BTL']}"
+    t2 = f"DÀY {int(round(1000 * p['HDT']))}mm"
+    w = max(txtw(t1, 2.0), txtw(t2, 2.0))
+    xe = v.x(L) + 4.0
+    ye = v.y(B) + (-3.0 if side else 4.0)
+    with c.item("dtnote", "Ghi chú đối trọng"):
+        c.pl("CHU", False, [pt, (xe, ye), (xe + w + 1.0, ye)], fixed=(0,))
+        c.tx("CHU", xe + 0.5, ye + 0.8, 2.0, t1)
+        c.tx("CHU", xe + 0.5, ye - 2.8, 2.0, t2)
+    if side:
+        tw = txtw("MẶT BẰNG ĐỐI TRỌNG", 4.0)
+        title(c, v.x(L) + 6.0 + tw / 2, v.y(-B) + 6.0, "MẶT BẰNG ĐỐI TRỌNG", f"TL:1/{den}")
+    else:
+        title(c, cx, yb - 19.0, "MẶT BẰNG ĐỐI TRỌNG", f"TL:1/{den}")
 
 
 def plan_marks(c: Ctx, g: Geo, v: V):
@@ -614,3 +737,6 @@ def draw(c: Ctx, g: Geo):
     else:
         tables.summary(c, g, 395.0, 267.0)
         note_at(c, 268.0, 90.0, [note])
+        if model.dt_selected(g.p):
+            with c.group("dtplan", "Mặt bằng đối trọng"):
+                dt_plan(c, g, 340.0, 185.0)
