@@ -268,6 +268,10 @@ class App(tk.Tk):
         self.l_xls.pack(side="left")
         self.l_frame = ttk.Label(info, text="", style="Info.TLabel")
         self.l_frame.pack(side="right")
+        # lỗi / cảnh báo số liệu: dải đỏ ngay dưới thanh thông tin, chỉ hiện khi có nội dung
+        self._info_bar = info
+        self.l_err = tk.Label(self, text="", background="#FDECEA", foreground=C["red"], anchor="w",
+                              justify="left", padx=12, pady=3, font=(f[0], f[1], "bold"))
 
         pw = ttk.PanedWindow(self, orient="horizontal")
         pw.pack(fill="both", expand=True, padx=8, pady=(0, 6))
@@ -453,11 +457,15 @@ class App(tk.Tk):
                 fr = ttk.Frame(body)
                 fr.grid(row=r, column=2, columnspan=2, sticky="w")
                 ttk.Entry(fr, textvariable=self._var(ks), width=6).pack(side="left")
-                ttk.Combobox(fr, textvariable=self._var("RD_ARR"), values=model.ARR_NAMES, width=15,
+                ttk.Combobox(fr, textvariable=self._var("RD_ARR"), values=model.ARR_NAMES, width=13,
                              state="readonly").pack(side="left", padx=(4, 0))
             else:
                 ttk.Entry(body, textvariable=self._var(ks), width=6).grid(row=r, column=2, sticky="w")
             r += 1
+            if ks == "RD_N":             # cách bố trí thép chủ dầm ngay dưới dòng thép dầm
+                self.l_rib = ttk.Label(body, text="", style="Sub.TLabel")
+                self.l_rib.grid(row=r, column=1, columnspan=3, sticky="w")
+                r += 1
         ttk.Label(body, text="Thép chủ cổ móng: số thanh / Ø").grid(row=r, column=0, sticky="w", padx=(10, 4), pady=1)
         ttk.Entry(body, textvariable=self._var("RC_N"), width=5).grid(row=r, column=1, sticky="w")
         ttk.Entry(body, textvariable=self._var("RC_D"), width=6).grid(row=r, column=2, sticky="w")
@@ -474,8 +482,6 @@ class App(tk.Tk):
         self.l_info = ttk.Label(body, text="", style="Info2.TLabel", wraplength=520, justify="left")
         self.l_info.grid(row=r, column=0, columnspan=4, sticky="w", padx=6, pady=(10, 2))
         r += 1
-        self.l_err = ttk.Label(body, text="", style="Err.TLabel", wraplength=520, justify="left")
-        self.l_err.grid(row=r, column=0, columnspan=4, sticky="w", padx=6)
 
     # ------------------------------------------------------------ dữ liệu
     def _fill(self):
@@ -538,22 +544,29 @@ class App(tk.Tk):
                 self.after_cancel(self._job)
             self._job = self.after(1200, self.preview)
 
+    def _set_err(self, text):
+        self.l_err.config(text=text)
+        if text:
+            self.l_err.pack(side="top", fill="x", after=self._info_bar)
+        else:
+            self.l_err.pack_forget()
+
     def _update_info(self):
         try:
             p = self._collect()
         except ValueError:
-            self.l_err.config(text="[!] Có ô nhập không phải số.")
+            self._set_err("[!] Có ô nhập không phải số.")
             return None
         err = model.validate(p)
         warn = [] if err else model.warnings(p)
-        self.l_err.config(text=f"[!] {err}" if err else ("".join(f"[Cảnh báo] {w}\n" for w in warn).strip()))
+        self._set_err(f"[!] {err}" if err else "   ".join(f"[Cảnh báo] {w}" for w in warn))
         if not err:
-            info = f"Loại móng: {model.type_name(p)}"
+            info = ""
             try:
                 from mongban.geom import Geo
                 g = Geo(p)
                 g.rib_bars()
-                info += "\nThép chủ dầm mỗi mặt: " + " + ".join(str(len(r)) for _, r in g.rows_t) + " thanh"
+                self.l_rib.config(text="Bố trí mỗi mặt: " + " + ".join(str(len(r)) for _, r in g.rows_t) + " thanh")
                 if model.dt_selected(p):
                     info += (f"\nĐối trọng: ô {', '.join(map(str, model.dt_selected(p)))} - "
                              f"{model.vol_dt(p):.2f} m3 bê tông {p['BTL']}")
@@ -561,7 +574,7 @@ class App(tk.Tk):
                     info += f"\nĐất đắp thêm: {model.vol_dd(p):.2f} m3 ; đất thừa: {model.vol_thua(p):.2f} m3"
             except Exception:
                 pass
-            self.l_info.config(text=info)
+            self.l_info.config(text=info.strip())
         return None if err else p
 
     def auto_scale(self):

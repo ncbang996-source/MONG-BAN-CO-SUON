@@ -381,7 +381,7 @@ def validate(p) -> str | None:
 GAP_MIN = 0.04      # khoảng hở ngang tối thiểu giữa các thanh thép chủ (m)
 
 
-ARR_NAMES = ["Các hàng đều nhau", "Đầy hàng ngoài"]
+ARR_NAMES = ["Hàng đều nhau", "Đầy hàng ngoài"]
 
 
 def rib_rows(n, m, arr):

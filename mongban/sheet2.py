@@ -570,7 +570,7 @@ def draw(c: Ctx, g: Geo):
         from .sheet1 import dt_plan
         with c.group("dtplan", "Mặt bằng đối trọng"):
             k2 = 1000.0 / (2 * g.den)
-            dt_plan(c, g, 270.0 + k2 * g.Lh, min(ybb, 178.0) - 6.0 - g.Bh * k2, side=True)
+            dt_plan(c, g, 270.0 + k2 * g.Lh, ybb - 6.0 - g.Bh * k2, side=True)
         note_at(c, 172.0, 120.0, notes)
     else:
         note_at(c, 268.0, min(ybb, 125.0), notes)

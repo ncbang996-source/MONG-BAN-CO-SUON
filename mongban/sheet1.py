@@ -218,7 +218,41 @@ def draw_section(c: Ctx, g: Geo):
         c.pl("CHU", False, [(xf, ygl - 2.0), (xf + 4.0, ygl + 4.5), (xf + 4.4 + txtw(T_FILL, 2.0), ygl + 4.5)],
              fixed=(0,))
         c.tx("CHU", xf + 4.2, ygl + 5.3, 2.0, T_FILL)
+        if hdd > 1e-6:                   # lớp đất đắp thêm cũng là đất đắp đầm chặt
+            c.ln("CHU", xf + 4.0, ygl + 4.5, cx + k * (g.Lh - 0.4), ygl + 0.5 * k * hdd, fixed2=True)
+    draw_dt_section(c, g, v)
     title(c, cx, g.yd - 7.5, "MẶT CẮT A-A", f"TL:1/{g.den}")
+
+
+def draw_dt_section(c: Ctx, g: Geo, v: V):
+    """Đối trọng trên mặt cắt A-A (cắt theo trục X qua tim móng): phần bị cắt có hatch + kích thước chiều cao."""
+    reg = dt_region(g)
+    if reg is None:
+        return
+    from shapely.geometry import LineString
+    h = g.p["HDT"]
+    y0 = 1e-6 if model.dt_orient(g.p) == "y" else 0.0      # nửa +Y: mặt cắt nằm đúng mép khối -> lấy sát bên trong
+    cut = reg.intersection(LineString([(-g.Lh - 1, y0), (g.Lh + 1, y0)]))
+    segs = [ln for ln in getattr(cut, "geoms", [cut]) if ln.length > 1e-6 and ln.geom_type == "LineString"]
+    if not segs:
+        return
+    edges = sorted({s_ * g.dx + t * g.a / 2 for s_ in (-1, 1) for t in (-1, 1)})
+    for ln in segs:
+        xa, xb = sorted((ln.coords[0][0], ln.coords[-1][0]))
+        xs = [xa] + [x for x in edges if xa < x < xb] + [xb]
+        for x1, x2 in zip(xs[:-1], xs[1:]):
+            xm = 0.5 * (x1 + x2)
+            on_rib = any(abs(xm - s_ * g.dx) < g.a / 2 for s_ in (-1, 1))
+            zb = g.hd if on_rib else g.hs
+            zt = g.hs + h
+            if zt - zb < 1e-6:
+                continue
+            pts = [v.P(x1, zb), v.P(x2, zb), v.P(x2, zt), v.P(x1, zt)]
+            c.hatch("HATCH", pts, "AR-CONC", 0.375 * v.k / 10.0)
+            c.pl("HINH THUC", True, pts)
+    xr = max(max(ln.coords[0][0], ln.coords[-1][0]) for ln in segs)
+    xd = v.x(g.Lh) + 14.0
+    c.dimV("DIM", v.P(xr, g.hs), v.P(xr, g.hs + h), xd)
 
 
 def draw_cushion(c: Ctx, g: Geo):
@@ -538,6 +572,8 @@ def dt_plan(c: Ctx, g: Geo, cx, cy, side=False):
         v.ln("TRUC", -L - 0.4, s_ * g.dy, L + 0.4, s_ * g.dy)
     v.ln("TRUC", -L - 0.4, 0.0, L + 0.4, 0.0)
     v.ln("TRUC", 0.0, -B - 0.4, 0.0, B + 0.4)
+    with c.item("dtroute", "Hướng tuyến"):
+        draw_route(c, g, cx, cy, v.k * B - 1.0, v.k * L - 1.0, v.k)
     # kích thước: tim dầm + tổng
     yb = v.y(-B)
     for x1, x2 in ((-L, -g.dx), (-g.dx, 0.0), (0.0, g.dx), (g.dx, L)):
